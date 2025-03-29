@@ -1,0 +1,286 @@
+﻿@page "/admin/bookings"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using System.Reflection
+@using Gatorz.Data
+@attribute [Authorize(Roles = "Admin")]
+@inject ApplicationDbContext DbContext
+
+<PageTitle>Booking Management - Gatorz</PageTitle>
+
+<div class="container-fluid py-4">
+    <h1>Booking Management</h1>
+    <p class="lead">View customer bookings</p>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center my-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger">
+            <h4>Error Loading Bookings</h4>
+            <p>@errorMessage</p>
+        </div>
+    }
+    else if (bookings == null || !bookings.Any())
+    {
+        <div class="alert alert-info">
+            <h4>No Bookings Found</h4>
+            <p>There are no bookings in the database.</p>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-header">
+                <h5>Bookings</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                @foreach (var prop in displayProperties)
+                                {
+                                    <th>@FormatPropertyName(prop.Name)</th>
+                                }
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var booking in bookings)
+                            {
+                                <tr>
+                                    @foreach (var prop in displayProperties)
+                                    {
+                                        <td>
+                                            @try
+                                            {
+                                                var value = prop.GetValue(booking);
+                                                if (value == null)
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                                else if (IsNumericType(prop.PropertyType))
+                                                {
+                                                    if (prop.Name.Contains("Price", StringComparison.OrdinalIgnoreCase))
+                                                    {
+                                                        @:$@(Convert.ToDecimal(value).ToString("N2"))
+                                                    }
+                                                    else
+                                                    {
+                                                        @value
+                                                    }
+                                                }
+                                                else if (prop.PropertyType == typeof(DateTime))
+                                                {
+                                                    @(((DateTime)value).ToString("MM/dd/yyyy"))
+                                                }
+                                                else if (IsSimpleType(prop.PropertyType))
+                                                {
+                                                    @value.ToString()
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">[Complex]</span>
+                                                }
+                                            }
+                                            catch
+                                            {
+                                                <span class="text-danger">Error</span>
+                                            }
+                                        </td>
+                                    }
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" @onclick="() => ShowDetails(booking)">
+                                            Details
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (selectedBooking != null)
+    {
+        <div class="modal fade show" style="display: block;" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Booking Details</h5>
+                        <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            @foreach (var prop in allProperties)
+                            {
+                                <div class="col-md-6 mb-3">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">@FormatPropertyName(prop.Name)</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            @try
+                                            {
+                                                var value = prop.GetValue(selectedBooking);
+                                                if (value == null)
+                                                {
+                                                    <span class="text-muted">Not set</span>
+                                                }
+                                                else if (IsNumericType(prop.PropertyType))
+                                                {
+                                                    if (prop.Name.Contains("Price", StringComparison.OrdinalIgnoreCase))
+                                                    {
+                                                        <span class="fw-bold">$@(Convert.ToDecimal(value).ToString("N2"))</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>@value</span>
+                                                    }
+                                                }
+                                                else if (prop.PropertyType == typeof(DateTime))
+                                                {
+                                                    <span>@(((DateTime)value).ToString("MM/dd/yyyy HH:mm"))</span>
+                                                }
+                                                else if (IsSimpleType(prop.PropertyType))
+                                                {
+                                                    <span>@value.ToString()</span>
+                                                }
+                                                else if (IsCollectionType(prop.PropertyType))
+                                                {
+                                                    <span class="text-muted">Collection type - not displayed</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">Complex object - not displayed</span>
+                                                }
+                                            }
+                                            catch
+                                            {
+                                                <span class="text-danger">Error accessing property</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseModal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop fade show"></div>
+    }
+</div>
+
+@code {
+    private List<object> bookings;
+    private bool isLoading = true;
+    private string errorMessage;
+    private object selectedBooking;
+    private PropertyInfo[] allProperties;
+    private PropertyInfo[] displayProperties;
+
+    private static readonly string[] CommonDisplayProperties = new[] {
+        "Id", "BookingDate", "Status", "TotalPrice"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            isLoading = true;
+
+            // Get the Booking type
+            Type bookingType = typeof(Booking);
+            allProperties = bookingType.GetProperties();
+
+            // Filter properties for display
+            displayProperties = allProperties
+                .Where(p => IsSimpleType(p.PropertyType) || p.PropertyType == typeof(DateTime))
+                .Where(p => !IsCollectionType(p.PropertyType))
+                .Where(p => p.Name != "User" && p.Name != "TravelPackages") // Skip navigation properties
+                .OrderByDescending(p => CommonDisplayProperties.Contains(p.Name)) // Prioritize common properties
+                .ThenBy(p => p.Name)
+                .Take(6) // Only display up to 6 columns for readability
+                .ToArray();
+
+            // Load bookings
+            var bookingsData = await DbContext.Bookings
+                .AsNoTracking()
+                .OrderByDescending(b => EF.Property<object>(b, "Id"))
+                .Take(20) // Limit to 20 records for performance
+                .ToListAsync();
+
+            bookings = bookingsData.Cast<object>().ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading bookings: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowDetails(object booking)
+    {
+        selectedBooking = booking;
+    }
+
+    private void CloseModal()
+    {
+        selectedBooking = null;
+    }
+
+    private string FormatPropertyName(string propertyName)
+    {
+        // Insert spaces before capital letters
+        var result = System.Text.RegularExpressions.Regex.Replace(propertyName, "([A-Z])", " $1").Trim();
+        // Capitalize first letter
+        return char.ToUpper(result[0]) + result.Substring(1);
+    }
+
+    private bool IsSimpleType(Type type)
+    {
+        return type.IsPrimitive
+            || type.IsEnum
+            || type == typeof(string)
+            || type == typeof(decimal)
+            || type == typeof(DateTime)
+            || type == typeof(TimeSpan)
+            || type == typeof(Guid);
+    }
+
+    private bool IsNumericType(Type type)
+    {
+        return type == typeof(int)
+            || type == typeof(long)
+            || type == typeof(short)
+            || type == typeof(byte)
+            || type == typeof(uint)
+            || type == typeof(ulong)
+            || type == typeof(ushort)
+            || type == typeof(sbyte)
+            || type == typeof(float)
+            || type == typeof(double)
+            || type == typeof(decimal);
+    }
+
+    private bool IsCollectionType(Type type)
+    {
+        return type.IsArray || type.Name.Contains("Collection") || type.Name.Contains("List");
+    }
+}
