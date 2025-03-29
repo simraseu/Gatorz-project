@@ -15,6 +15,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Remove="Components\Pages\Admin\BookingsDiagnostic.razor" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Components\Pages\Admin\BookingsDiagnostic.razor" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Gatorz.Client\Gatorz.Client.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="8.0.14" />
     <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="8.0.14" />

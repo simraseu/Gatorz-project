@@ -1,5 +1,4 @@
-﻿// Components/Pages/Admin/UserRoles.razor
-@page "/admin/users"
+﻿@page "/admin/users"
 @using Microsoft.AspNetCore.Identity
 @using Gatorz.Data
 @using Microsoft.AspNetCore.Authorization
@@ -9,51 +8,53 @@
 
 <PageTitle>User Management - Gatorz</PageTitle>
 
-<h1>User Management</h1>
-<p>Manage users and their roles in the system.</p>
+<div class="container-fluid py-4">
+    <h1>User Management</h1>
+    <p class="lead">Manage users and their roles in the system.</p>
 
-@if (users == null)
-{
-    <p><em>Loading...</em></p>
-}
-else
-{
     <div class="row mb-3">
         <div class="col">
             <input type="text" class="form-control" placeholder="Search by name or email" @bind="searchTerm" @bind:event="oninput" />
         </div>
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Roles</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var user in filteredUsers)
-                {
+    @if (users == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
                     <tr>
-                        <td>@user.FirstName @user.LastName</td>
-                        <td>@user.Email</td>
-                        <td>
-                            @if (userRoles.ContainsKey(user.Id))
-                            {
-                                @string.Join(", ", userRoles[user.Id])
-                            }
-                        </td>
-                        <td>
-                            <button class="btn btn-primary btn-sm" @onclick="() => ShowRoleModal(user)">Manage Roles</button>
-                        </td>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Roles</th>
+                        <th>Actions</th>
                     </tr>
-                }
-            </tbody>
-        </table>
-    </div>
+                </thead>
+                <tbody>
+                    @foreach (var user in filteredUsers)
+                    {
+                        <tr>
+                            <td>@user.FirstName @user.LastName</td>
+                            <td>@user.Email</td>
+                            <td>
+                                @if (userRoles.ContainsKey(user.Id))
+                                {
+                                    @string.Join(", ", userRoles[user.Id])
+                                }
+                            </td>
+                            <td>
+                                <button class="btn btn-primary btn-sm" @onclick="() => ShowRoleModal(user)">Manage Roles</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
 
     @if (showRoleModal && selectedUser != null)
     {
@@ -98,7 +99,7 @@ else
         </div>
         <div class="modal-backdrop fade show"></div>
     }
-}
+</div>
 
 @code {
     private List<ApplicationUser> users;
