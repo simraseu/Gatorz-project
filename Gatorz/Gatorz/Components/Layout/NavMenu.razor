@@ -1,5 +1,4 @@
-﻿// Components/NavMenu.razor
-@implements IDisposable
+﻿@implements IDisposable
 @inject NavigationManager NavigationManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using System.Security.Claims
@@ -27,6 +26,7 @@
 
         @if (isAuthenticated)
         {
+           
             @if (isAdmin)
             {
                 <div class="nav-item px-3">
@@ -57,6 +57,7 @@
             <div class="nav-item px-3">
                 <form action="Account/Logout" method="post">
                     <AntiforgeryToken />
+                    <input type="hidden" name="returnUrl" value="" />
                     <button type="submit" class="nav-link" style="border:none; background:none; width:100%; text-align:left;">
                         <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Logout
                     </button>
@@ -85,6 +86,7 @@
     private bool isAdmin;
     private bool isSalesAgent;
     private bool isCustomer;
+    private string firstName = "";
 
     protected override void OnInitialized()
     {
@@ -118,6 +120,27 @@
         isAdmin = user.IsInRole("Admin");
         isSalesAgent = user.IsInRole("SalesAgent");
         isCustomer = user.IsInRole("Customer");
+
+        if (isAuthenticated)
+        {
+            // Try to get the user's claims
+            var firstNameClaim = user.FindFirst("FirstName");
+            if (firstNameClaim != null)
+            {
+                firstName = firstNameClaim.Value;
+            }
+            else
+            {
+                // If FirstName claim doesn't exist, try to get from Identity
+                var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim != null)
+                {
+                    // We could try to load the user from database here
+                    // For now, just use a generic name
+                    firstName = "User";
+                }
+            }
+        }
 
         StateHasChanged();
     }
