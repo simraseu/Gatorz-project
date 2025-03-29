@@ -1,0 +1,39 @@
+﻿// Components/Pages/SalesAgent/Dashboard.razor
+@page "/sales/dashboard"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "SalesAgent,Admin")]
+
+<PageTitle>Sales Agent Dashboard - Gatorz</PageTitle>
+
+<h1>Sales Agent Dashboard</h1>
+<p>Welcome to the sales agent dashboard. From here you can manage customer bookings and handle sales activities.</p>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Customer Bookings</h5>
+            </div>
+            <div class="card-body">
+                <p>View and manage customer bookings.</p>
+                <a href="/sales/bookings" class="btn btn-primary">Manage Bookings</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Customer Inquiries</h5>
+            </div>
+            <div class="card-body">
+                <p>Handle customer inquiries and requests.</p>
+                <a href="/sales/inquiries" class="btn btn-primary">View Inquiries</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Controller logic goes here
+}

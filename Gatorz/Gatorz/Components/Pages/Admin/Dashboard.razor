@@ -1,0 +1,51 @@
+﻿// Components/Pages/Admin/Dashboard.razor
+@using Microsoft.AspNetCore.Authorization
+@page "/admin/dashboard"
+@attribute [Authorize(Roles = "Admin")]
+
+<PageTitle>Admin Dashboard - Gatorz</PageTitle>
+
+<h1>Admin Dashboard</h1>
+<p>Welcome to the admin dashboard. From here you can manage the entire system.</p>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">User Management</h5>
+            </div>
+            <div class="card-body">
+                <p>Manage users, assign roles, and handle account issues.</p>
+                <a href="/admin/users" class="btn btn-primary">Manage Users</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Travel Packages</h5>
+            </div>
+            <div class="card-body">
+                <p>Create, edit, and manage travel packages.</p>
+                <a href="/admin/packages" class="btn btn-primary">Manage Packages</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Bookings</h5>
+            </div>
+            <div class="card-body">
+                <p>View and manage all customer bookings.</p>
+                <a href="/admin/bookings" class="btn btn-primary">Manage Bookings</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Controller logic goes here
+}

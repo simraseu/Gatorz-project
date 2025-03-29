@@ -1,0 +1,39 @@
+﻿// Components/Pages/Customer/Dashboard.razor
+@page "/customer/dashboard"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Customer")]
+
+<PageTitle>My Account - Gatorz</PageTitle>
+
+<h1>My Account</h1>
+<p>Welcome to your account dashboard. From here you can manage your bookings and account settings.</p>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">My Bookings</h5>
+            </div>
+            <div class="card-body">
+                <p>View and manage your current bookings.</p>
+                <a href="/customer/bookings" class="btn btn-primary">View Bookings</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Account Settings</h5>
+            </div>
+            <div class="card-body">
+                <p>Update your personal information and preferences.</p>
+                <a href="/customer/settings" class="btn btn-primary">Account Settings</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Controller logic goes here
+}
