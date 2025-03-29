@@ -1,16 +1,19 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Gatorz.Models;
+using Gatorz.Components.Account;
 
 namespace Gatorz.Data
 {
-    public class ApplicationDbContext : DbContext
+    public class ApplicationDbContext : IdentityDbContext<ApplicationUser, IdentityRole, string>
     {
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options)
         {
         }
 
-        public DbSet<User> Users { get; set; }
+        public DbSet<User> AppUsers { get; set; }
         public DbSet<Booking> Bookings { get; set; }
         public DbSet<TravelPackage> TravelPackages { get; set; }
         public DbSet<FlightInfo> FlightInfos { get; set; }
@@ -20,8 +23,24 @@ namespace Gatorz.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // Her kan du definere relationer, constraints, osv.
-            // Eksempel:
+            // Decimal precision konfiguration
+            modelBuilder.Entity<Booking>()
+                .Property(b => b.TotalPrice)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<FlightInfo>()
+                .Property(f => f.Price)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<HotelInfo>()
+                .Property(h => h.PricePerNight)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<TravelPackage>()
+                .Property(tp => tp.Price)
+                .HasPrecision(18, 2);
+
+            // Eksisterende relationer
             modelBuilder.Entity<Booking>()
                 .HasOne(b => b.User)
                 .WithMany(u => u.Bookings)

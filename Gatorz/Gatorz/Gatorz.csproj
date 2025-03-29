@@ -8,6 +8,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Components\Shared\**" />
+    <Content Remove="Components\Shared\**" />
+    <EmbeddedResource Remove="Components\Shared\**" />
+    <None Remove="Components\Shared\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Gatorz.Client\Gatorz.Client.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="8.0.14" />
     <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="8.0.14" />
@@ -22,13 +29,6 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Components\Shared\" />
-    <Folder Include="Components\Pages\Admin\" />
-    <Folder Include="Components\Pages\Customer\" />
-    <Folder Include="Components\Pages\SalesAgent\" />
   </ItemGroup>
 
 </Project>
