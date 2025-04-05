@@ -1,0 +1,321 @@
+﻿@page "/customer/booking/{BookingId:int}"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Gatorz.Data
+@using Microsoft.EntityFrameworkCore
+@using Gatorz.Models
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize(Roles = "Customer")]
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext DbContext
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Booking Details - Gatorz</PageTitle>
+
+<div class="container py-4">
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading booking details...</span>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger">
+            <h4>Error Loading Booking</h4>
+            <p>@errorMessage</p>
+            <a href="/customer/bookings" class="btn btn-primary">Return to Bookings</a>
+        </div>
+    }
+    else if (booking == null)
+    {
+        <div class="alert alert-warning">
+            <h4>Booking Not Found</h4>
+            <p>The requested booking could not be found or you don't have permission to view it.</p>
+            <a href="/customer/bookings" class="btn btn-primary">Return to Bookings</a>
+        </div>
+    }
+    else
+    {
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1>Booking #@booking.Id</h1>
+                <p class="lead text-muted">Booked on @booking.BookingDate.ToString("MMMM d, yyyy")</p>
+            </div>
+            <span class="badge @GetStatusBadgeClass(booking.Status) fs-5">@booking.Status</span>
+        </div>
+
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Travel Packages</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (booking.TravelPackages != null && booking.TravelPackages.Any())
+                        {
+                            @foreach (var package in booking.TravelPackages)
+                            {
+                                <div class="card mb-3 package-item">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-3">
+                                            <h5 class="card-title mb-0">@package.Destination</h5>
+                                            <span class="badge bg-info">
+                                                @((package.EndDate - package.StartDate).Days) nights
+                                            </span>
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <p><strong>Dates:</strong> @package.StartDate.ToString("MMM d") - @package.EndDate.ToString("MMM d"), @package.StartDate.Year</p>
+
+                                                @if (package.Flight != null)
+                                                {
+                                                    <div class="mb-3">
+                                                        <h6>Flight Details</h6>
+                                                        <p class="mb-1">
+                                                            <i class="bi bi-airplane"></i>
+                                                            @package.Flight.Airline - @package.Flight.FlightNumber
+                                                        </p>
+                                                        <p class="mb-1">
+                                                            From: @package.Flight.DepartureAirport at
+                                                            @package.Flight.DepartureTime.ToString("h:mm tt, MMM d")
+                                                        </p>
+                                                        <p class="mb-1">
+                                                            To: @package.Flight.ArrivalAirport at
+                                                            @package.Flight.ArrivalTime.ToString("h:mm tt, MMM d")
+                                                        </p>
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="col-md-6">
+                                                @if (package.Hotel != null)
+                                                {
+                                                    <div class="mb-3">
+                                                        <h6>Hotel Details</h6>
+                                                        <p class="mb-1">
+                                                            <i class="bi bi-building"></i>
+                                                            @package.Hotel.HotelName
+                                                            <span class="hotel-stars">
+                                                                @(new string('★', package.Hotel.StarRating) + new string('☆', 5 - package.Hotel.StarRating))
+                                                            </span>
+                                                        </p>
+                                                        <p class="mb-1">
+                                                            @package.Hotel.Address, @package.Hotel.City, @package.Hotel.Country
+                                                        </p>
+                                                        <p class="mb-1">
+                                                            Room: @package.Hotel.RoomType
+                                                        </p>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        <p class="text-end mb-0"><strong>Package Price:</strong> $@package.Price.ToString("N2")</p>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <p>No travel packages found for this booking.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Booking Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Sub-total:</span>
+                            <span>$@(CalculateSubtotal().ToString("N2"))</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Fees & Taxes:</span>
+                            <span>$@(CalculateTaxesAndFees().ToString("N2"))</span>
+                        </div>
+                        <hr />
+                        <div class="d-flex justify-content-between mb-2 fw-bold">
+                            <span>Total Price:</span>
+                            <span>$@booking.TotalPrice.ToString("N2")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Actions</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" @onclick="PrintBookingDetails">
+                                <i class="bi bi-printer"></i> Print Booking Details
+                            </button>
+
+                            @if (CanCancelBooking())
+                            {
+                                <button class="btn btn-danger" @onclick="ShowCancelModal">
+                                    <i class="bi bi-x-circle"></i> Cancel Booking
+                                </button>
+                            }
+
+                            <a href="/customer/bookings" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> Back to Bookings
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (showCancelModal)
+        {
+            <div class="modal fade show" style="display: block;" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Confirm Cancellation</h5>
+                            <button type="button" class="btn-close" @onclick="CloseCancelModal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Are you sure you want to cancel this booking?</p>
+                            <p>Cancellation may be subject to fees depending on the timing and terms.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseCancelModal">Keep Booking</button>
+                            <button type="button" class="btn btn-danger" @onclick="CancelBooking">Yes, Cancel Booking</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-backdrop fade show"></div>
+        }
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    [Parameter]
+    public int BookingId { get; set; }
+
+    private Booking booking;
+    private bool isLoading = true;
+    private string errorMessage;
+    private bool showCancelModal = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            isLoading = true;
+
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var currentUser = await UserManager.GetUserAsync(authState.User);
+            if (currentUser == null)
+            {
+                errorMessage = "Unable to load user information.";
+                return;
+            }
+
+            // This is a simplified approach. In a real app, you'd have a proper way to load bookings
+            // for the specific identity user
+            booking = await DbContext.Bookings
+                .Include(b => b.TravelPackages)
+                .ThenInclude(tp => tp.Flight)
+                .Include(b => b.TravelPackages)
+                .ThenInclude(tp => tp.Hotel)
+                .FirstOrDefaultAsync(b => b.Id == BookingId && b.UserId == 1); // Simplified
+
+            if (booking == null)
+            {
+                errorMessage = "Booking not found or you don't have permission to view it.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading booking details: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private string GetStatusBadgeClass(string status)
+    {
+        return status?.ToLower() switch
+        {
+            "confirmed" => "bg-success",
+            "pending" => "bg-warning",
+            "cancelled" => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private decimal CalculateSubtotal()
+    {
+        if (booking?.TravelPackages == null)
+            return 0;
+
+        return booking.TravelPackages.Sum(p => p.Price);
+    }
+
+    private decimal CalculateTaxesAndFees()
+    {
+        // In a real application, you'd calculate actual taxes and fees
+        // For this demo, we'll assume taxes and fees are the difference between total and subtotal
+        var subtotal = CalculateSubtotal();
+        return booking?.TotalPrice - subtotal ?? 0;
+    }
+
+    private bool CanCancelBooking()
+    {
+        if (booking == null || booking.Status.ToLower() == "cancelled")
+            return false;
+
+        // Check if all trips are in the future
+        return booking.TravelPackages.All(p => p.StartDate > DateTime.Now.AddDays(1));
+    }
+
+    private void ShowCancelModal()
+    {
+        showCancelModal = true;
+    }
+
+    private void CloseCancelModal()
+    {
+        showCancelModal = false;
+    }
+
+    private async Task CancelBooking()
+    {
+        try
+        {
+            booking.Status = "Cancelled";
+            await DbContext.SaveChangesAsync();
+            showCancelModal = false;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to cancel booking: {ex.Message}";
+            CloseCancelModal();
+        }
+    }
+
+    private void PrintBookingDetails()
+    {
+        // In a real application, you'd implement printing functionality
+        // For this demo, we'll just show a JavaScript alert
+        // You could use JSRuntime to call window.print()
+    }
+}
