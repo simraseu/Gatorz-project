@@ -5,6 +5,7 @@
 @attribute [Authorize(Roles = "Admin")]
 @inject UserManager<ApplicationUser> UserManager
 @inject RoleManager<IdentityRole> RoleManager
+@rendermode InteractiveServer
 
 <PageTitle>User Management - Gatorz</PageTitle>
 
