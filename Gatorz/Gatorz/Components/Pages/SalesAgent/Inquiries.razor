@@ -1,0 +1,655 @@
+﻿@page "/sales/inquiries"
+@using Microsoft.AspNetCore.Authorization
+@using Gatorz.Data
+@attribute [Authorize(Roles = "SalesAgent,Admin")]
+@inject NavigationManager NavigationManager
+
+<PageTitle>Customer Inquiries - Gatorz</PageTitle>
+
+<div class="container-fluid py-4">
+    <h1>Customer Inquiries</h1>
+    <p class="lead">Manage and respond to customer inquiries and support requests</p>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="input-group">
+                <input type="text" class="form-control" placeholder="Search by customer name or subject" 
+                       @bind="searchTerm" @bind:event="oninput" />
+                <button class="btn btn-primary" type="button" @onclick="ApplyFilters">
+                    <i class="bi bi-search"></i> Search
+                </button>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" @bind="statusFilter">
+                <option value="">All Statuses</option>
+                <option value="open">Open</option>
+                <option value="inprogress">In Progress</option>
+                <option value="resolved">Resolved</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" @bind="priorityFilter">
+                <option value="">All Priorities</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body">
+                    <h5 class="card-title">Total Inquiries</h5>
+                    <h2>@inquiries.Count</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-danger">
+                <div class="card-body">
+                    <h5 class="card-title">High Priority</h5>
+                    <h2>@inquiries.Count(i => i.Priority == "high")</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <h5 class="card-title">Pending Response</h5>
+                    <h2>@inquiries.Count(i => i.Status == "open")</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <h5 class="card-title">Resolved Today</h5>
+                    <h2>@inquiries.Count(i => i.Status == "resolved" && i.LastUpdated.Date == DateTime.Today)</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Customer</th>
+                    <th>Subject</th>
+                    <th>Received</th>
+                    <th>Status</th>
+                    <th>Priority</th>
+                    <th>Assigned To</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var inquiry in filteredInquiries)
+                {
+                    <tr>
+                        <td>@inquiry.Id</td>
+                        <td>@inquiry.CustomerName</td>
+                        <td>@inquiry.Subject</td>
+                        <td>@inquiry.SubmittedDate.ToString("MM/dd/yyyy")</td>
+                        <td>
+                            <span class="badge bg-@GetStatusColor(inquiry.Status)">
+                                @GetStatusName(inquiry.Status)
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge bg-@GetPriorityColor(inquiry.Priority)">
+                                @inquiry.Priority.ToUpper()
+                            </span>
+                        </td>
+                        <td>@(string.IsNullOrEmpty(inquiry.AssignedTo) ? "-" : inquiry.AssignedTo)</td>
+                        <td>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-primary" @onclick="() => ShowInquiryDetails(inquiry)">View</button>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowReplyModal(inquiry)">Reply</button>
+                                <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                                    More
+                                </button>
+                                <div class="dropdown-menu">
+                                    <button class="dropdown-item" @onclick='() => ChangeStatus(inquiry, "inprogress")'>Mark In Progress</button>
+                                    <button class="dropdown-item" @onclick='() => ChangeStatus(inquiry, "resolved")'>Mark Resolved</button>
+                                    <div class="dropdown-divider"></div>
+                                    <button class="dropdown-item" @onclick='() => ChangePriority(inquiry, "high")'>Set High Priority</button>
+                                    <button class="dropdown-item" @onclick='() => ChangePriority(inquiry, "medium")'>Set Medium Priority</button>
+                                    <button class="dropdown-item" @onclick='() => ChangePriority(inquiry, "low")'>Set Low Priority</button>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (selectedInquiry != null && showDetailsModal)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Inquiry Details</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h6>Customer Information</h6>
+                            <p><strong>Name:</strong> @selectedInquiry.CustomerName</p>
+                            <p><strong>Email:</strong> @selectedInquiry.CustomerEmail</p>
+                            <p><strong>Booking ID:</strong> @(selectedInquiry.BookingId > 0 ? selectedInquiry.BookingId.ToString() : "N/A")</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Inquiry Details</h6>
+                            <p><strong>Date Received:</strong> @selectedInquiry.SubmittedDate.ToString("MM/dd/yyyy HH:mm")</p>
+                            <p>
+                                <strong>Status:</strong>
+                                <span class="badge bg-@GetStatusColor(selectedInquiry.Status)">@GetStatusName(selectedInquiry.Status)</span>
+                            </p>
+                            <p>
+                                <strong>Priority:</strong>
+                                <span class="badge bg-@GetPriorityColor(selectedInquiry.Priority)">@selectedInquiry.Priority.ToUpper()</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">@selectedInquiry.Subject</h6>
+                        </div>
+                        <div class="card-body">
+                            <p>@selectedInquiry.Message</p>
+                        </div>
+                    </div>
+
+                    <h6>Conversation History</h6>
+                    <div class="conversation-history mb-4">
+                        @foreach (var reply in inquiryReplies.Where(r => r.InquiryId == selectedInquiry.Id).OrderBy(r => r.ReplyDate))
+                        {
+                            <div class="card mb-2 @(reply.IsFromCustomer ? "border-info" : "border-primary")">
+                                <div class="card-header bg-@(reply.IsFromCustomer ? "info" : "primary") text-white">
+                                    <div class="d-flex justify-content-between">
+                                        <span>@(reply.IsFromCustomer ? "Customer" : reply.SentBy)</span>
+                                        <span>@reply.ReplyDate.ToString("MM/dd/yyyy HH:mm")</span>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <p class="mb-0">@reply.Message</p>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Quick Reply</label>
+                        <textarea class="form-control" rows="4" placeholder="Type your reply here..." @bind="replyMessage"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <div class="btn-group me-auto">
+                        <button class="btn btn-outline-primary" @onclick='() => ChangeStatus(selectedInquiry, "inprogress")'>Mark In Progress</button>
+                        <button class="btn btn-outline-success" @onclick='() => ChangeStatus(selectedInquiry, "resolved")'>Mark Resolved</button>
+                    </div>
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">Close</button>
+                    <button type="button" class="btn btn-primary" @onclick="SendReply">Send Reply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@if (selectedInquiry != null && showReplyModal)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Reply to Inquiry</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">To</label>
+                        <input type="text" class="form-control" value="@selectedInquiry.CustomerEmail" disabled />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Subject</label>
+                        <input type="text" class="form-control" value="Re: @selectedInquiry.Subject" disabled />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Message</label>
+                        <textarea class="form-control" rows="6" placeholder="Type your reply here..." @bind="replyMessage"></textarea>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="markResolvedCheck" @bind="markResolvedAfterReply" />
+                        <label class="form-check-label" for="markResolvedCheck">
+                            Mark as resolved after sending reply
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SendReply">Send Reply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    // Inquiry model class
+    private class CustomerInquiry
+    {
+        public int Id { get; set; }
+        public string CustomerName { get; set; }
+        public string CustomerEmail { get; set; }
+        public int BookingId { get; set; }
+        public string Subject { get; set; }
+        public string Message { get; set; }
+        public DateTime SubmittedDate { get; set; }
+        public DateTime LastUpdated { get; set; }
+        public string Status { get; set; } // open, inprogress, resolved
+        public string Priority { get; set; } // high, medium, low
+        public string AssignedTo { get; set; }
+    }
+    
+    // Reply model class
+    private class InquiryReply
+    {
+        public int Id { get; set; }
+        public int InquiryId { get; set; }
+        public string Message { get; set; }
+        public DateTime ReplyDate { get; set; }
+        public string SentBy { get; set; }
+        public bool IsFromCustomer { get; set; }
+    }
+    
+    private List<CustomerInquiry> inquiries = new List<CustomerInquiry>();
+    private List<CustomerInquiry> filteredInquiries = new List<CustomerInquiry>();
+    private List<InquiryReply> inquiryReplies = new List<InquiryReply>();
+    
+    // Search and filter
+    private string searchTerm = "";
+    private string statusFilter = "";
+    private string priorityFilter = "";
+    
+    // Modals
+    private CustomerInquiry selectedInquiry;
+    private bool showDetailsModal = false;
+    private bool showReplyModal = false;
+    private string replyMessage = "";
+    private bool markResolvedAfterReply = false;
+
+    protected override void OnInitialized()
+    {
+        // Create mock data
+        inquiries = CreateMockInquiries();
+        inquiryReplies = CreateMockReplies();
+        
+        // Apply initial filtering
+        ApplyFilters();
+    }
+    
+    private void ApplyFilters()
+    {
+        var filtered = inquiries;
+        
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filtered = filtered.Where(i => 
+                i.CustomerName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) || 
+                i.Subject.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+        }
+        
+        // Apply status filter
+        if (!string.IsNullOrWhiteSpace(statusFilter))
+        {
+            filtered = filtered.Where(i => i.Status == statusFilter).ToList();
+        }
+        
+        // Apply priority filter
+        if (!string.IsNullOrWhiteSpace(priorityFilter))
+        {
+            filtered = filtered.Where(i => i.Priority == priorityFilter).ToList();
+        }
+        
+        filteredInquiries = filtered;
+    }
+    
+    private string GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "open" => "warning",
+            "inprogress" => "primary",
+            "resolved" => "success",
+            _ => "secondary"
+        };
+    }
+    
+    private string GetStatusName(string status)
+    {
+        return status switch
+        {
+            "open" => "Open",
+            "inprogress" => "In Progress",
+            "resolved" => "Resolved",
+            _ => status
+        };
+    }
+    
+    private string GetPriorityColor(string priority)
+    {
+        return priority switch
+        {
+            "high" => "danger",
+            "medium" => "warning",
+            "low" => "info",
+            _ => "secondary"
+        };
+    }
+    
+    private void ShowInquiryDetails(CustomerInquiry inquiry)
+    {
+        selectedInquiry = inquiry;
+        showDetailsModal = true;
+        showReplyModal = false;
+        replyMessage = "";
+    }
+
+    private void ShowReplyModal(CustomerInquiry inquiry)
+    {
+        selectedInquiry = inquiry;
+        showReplyModal = true;
+        showDetailsModal = false;
+        replyMessage = "";
+        markResolvedAfterReply = false;
+    }
+
+    private void CloseModals()
+    {
+        showDetailsModal = false;
+        showReplyModal = false;
+        selectedInquiry = null;
+        replyMessage = "";
+    }
+
+    private void ChangeStatus(CustomerInquiry inquiry, string newStatus)
+    {
+        inquiry.Status = newStatus;
+        inquiry.LastUpdated = DateTime.Now;
+
+        // If the inquiry is resolved, update the assigned to field
+        if (newStatus == "resolved" && string.IsNullOrEmpty(inquiry.AssignedTo))
+        {
+            inquiry.AssignedTo = "Sales Agent";
+        }
+
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private void ChangePriority(CustomerInquiry inquiry, string newPriority)
+    {
+        inquiry.Priority = newPriority;
+        inquiry.LastUpdated = DateTime.Now;
+
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private void SendReply()
+    {
+        if (selectedInquiry != null && !string.IsNullOrWhiteSpace(replyMessage))
+        {
+            // Add the reply
+            inquiryReplies.Add(new InquiryReply
+                {
+                    Id = inquiryReplies.Count + 1,
+                    InquiryId = selectedInquiry.Id,
+                    Message = replyMessage,
+                    ReplyDate = DateTime.Now,
+                    SentBy = "Sales Agent",
+                    IsFromCustomer = false
+                });
+
+            // Update the inquiry
+            selectedInquiry.LastUpdated = DateTime.Now;
+
+            // If we're in the reply modal and the user checked to mark as resolved
+            if (showReplyModal && markResolvedAfterReply)
+            {
+                selectedInquiry.Status = "resolved";
+            }
+            // Otherwise if it's still open, mark it as in progress
+            else if (selectedInquiry.Status == "open")
+            {
+                selectedInquiry.Status = "inprogress";
+            }
+
+            // If not assigned, assign to the current user
+            if (string.IsNullOrEmpty(selectedInquiry.AssignedTo))
+            {
+                selectedInquiry.AssignedTo = "Sales Agent";
+            }
+
+            // Close modals and clear inputs
+            replyMessage = "";
+
+            // If we were in the details modal, keep it open to show the new reply
+            if (showDetailsModal)
+            {
+                showReplyModal = false;
+            }
+            else
+            {
+                CloseModals();
+            }
+
+            ApplyFilters();
+            StateHasChanged();
+        }
+    }
+
+    // Create mock data for demonstration
+    private List<CustomerInquiry> CreateMockInquiries()
+    {
+        return new List<CustomerInquiry>
+        {
+            new CustomerInquiry
+            {
+                Id = 1,
+                CustomerName = "John Smith",
+                CustomerEmail = "john.smith@example.com",
+                BookingId = 1001,
+                Subject = "Booking Modification Request",
+                Message = "I need to change my flight date from July 10 to July 15. Is this possible and what would be the additional cost?",
+                SubmittedDate = DateTime.Now.AddHours(-5),
+                LastUpdated = DateTime.Now.AddHours(-5),
+                Status = "open",
+                Priority = "high",
+                AssignedTo = ""
+            },
+            new CustomerInquiry
+            {
+                Id = 2,
+                CustomerName = "Sarah Johnson",
+                CustomerEmail = "sarah.j@example.com",
+                BookingId = 1002,
+                Subject = "Special Request for Hotel",
+                Message = "I have booked the Rome package and would like to request a room with a view if possible.",
+                SubmittedDate = DateTime.Now.AddDays(-1),
+                LastUpdated = DateTime.Now.AddDays(-1),
+                Status = "inprogress",
+                Priority = "medium",
+                AssignedTo = "Peter Hansen"
+            },
+            new CustomerInquiry
+            {
+                Id = 3,
+                CustomerName = "Michael Rodriguez",
+                CustomerEmail = "miker@example.com",
+                BookingId = 1003,
+                Subject = "Cancellation Policy",
+                Message = "Could you please explain the cancellation policy for my Barcelona trip? I might need to cancel due to work commitments.",
+                SubmittedDate = DateTime.Now.AddDays(-2),
+                LastUpdated = DateTime.Now.AddDays(-1),
+                Status = "resolved",
+                Priority = "low",
+                AssignedTo = "Maria Jensen"
+            },
+            new CustomerInquiry
+            {
+                Id = 4,
+                CustomerName = "Emma Wilson",
+                CustomerEmail = "emma.w@example.com",
+                BookingId = 1004,
+                Subject = "Airport Transfer Question",
+                Message = "Does my Dubai package include airport transfers? If not, how can I add this service?",
+                SubmittedDate = DateTime.Now.AddDays(-3),
+                LastUpdated = DateTime.Now.AddDays(-2),
+                Status = "open",
+                Priority = "medium",
+                AssignedTo = ""
+            },
+            new CustomerInquiry
+            {
+                Id = 5,
+                CustomerName = "David Thompson",
+                CustomerEmail = "david.t@example.com",
+                BookingId = 0,
+                Subject = "Price Inquiry for Family Trip",
+                Message = "I'm planning a family trip to Paris for 4 people (2 adults, 2 children ages 8 and 10) for next summer. Could you provide me with some package options and pricing?",
+                SubmittedDate = DateTime.Now.AddHours(-12),
+                LastUpdated = DateTime.Now.AddHours(-12),
+                Status = "open",
+                Priority = "medium",
+                AssignedTo = ""
+            },
+            new CustomerInquiry
+            {
+                Id = 6,
+                CustomerName = "Jennifer Lee",
+                CustomerEmail = "jennifer.l@example.com",
+                BookingId = 1005,
+                Subject = "Urgent: Visa Assistance",
+                Message = "I just realized my passport expires within 3 months of my trip to Thailand. Will this be a problem? Do I need to renew it before traveling?",
+                SubmittedDate = DateTime.Now.AddHours(-8),
+                LastUpdated = DateTime.Now.AddHours(-8),
+                Status = "inprogress",
+                Priority = "high",
+                AssignedTo = "Maria Jensen"
+            },
+            new CustomerInquiry
+            {
+                Id = 7,
+                CustomerName = "Robert Garcia",
+                CustomerEmail = "robert.g@example.com",
+                BookingId = 1006,
+                Subject = "Dietary Requirements",
+                Message = "I have a severe nut allergy. Can you ensure that the hotels in my booking are informed about this?",
+                SubmittedDate = DateTime.Now.AddDays(-5),
+                LastUpdated = DateTime.Now.AddDays(-4),
+                Status = "resolved",
+                Priority = "high",
+                AssignedTo = "Peter Hansen"
+            },
+            new CustomerInquiry
+            {
+                Id = 8,
+                CustomerName = "Lisa Brown",
+                CustomerEmail = "lisa.b@example.com",
+                BookingId = 0,
+                Subject = "Group Booking Discount",
+                Message = "We are a group of 10 people interested in a trip to Barcelona next spring. Do you offer any group discounts?",
+                SubmittedDate = DateTime.Now.AddDays(-2),
+                LastUpdated = DateTime.Now.AddDays(-2),
+                Status = "open",
+                Priority = "medium",
+                AssignedTo = ""
+            }
+        };
+    }
+
+    private List<InquiryReply> CreateMockReplies()
+    {
+        return new List<InquiryReply>
+        {
+            new InquiryReply
+            {
+                Id = 1,
+                InquiryId = 2,
+                Message = "Hello Sarah, I'll check with the hotel in Rome about room availability with a view. I'll get back to you as soon as I have information.",
+                ReplyDate = DateTime.Now.AddDays(-1).AddHours(1),
+                SentBy = "Peter Hansen",
+                IsFromCustomer = false
+            },
+            new InquiryReply
+            {
+                Id = 2,
+                InquiryId = 2,
+                Message = "Thank you for checking. I really appreciate it!",
+                ReplyDate = DateTime.Now.AddDays(-1).AddHours(2),
+                SentBy = "Customer",
+                IsFromCustomer = true
+            },
+            new InquiryReply
+            {
+                Id = 3,
+                InquiryId = 3,
+                Message = "Hello Michael, for your Barcelona trip, our cancellation policy allows for a full refund if cancelled 30 days before departure. Within 30 days, there's a 50% cancellation fee, and within 7 days there's no refund. Let me know if you need to proceed with cancellation.",
+                ReplyDate = DateTime.Now.AddDays(-2).AddHours(3),
+                SentBy = "Maria Jensen",
+                IsFromCustomer = false
+            },
+            new InquiryReply
+            {
+                Id = 4,
+                InquiryId = 3,
+                Message = "Thanks for the information. I'll let you know my decision soon.",
+                ReplyDate = DateTime.Now.AddDays(-1).AddHours(4),
+                SentBy = "Customer",
+                IsFromCustomer = true
+            },
+            new InquiryReply
+            {
+                Id = 5,
+                InquiryId = 6,
+                Message = "Hello Jennifer, this is indeed urgent. Most countries require that your passport is valid for at least 6 months beyond your travel dates. I recommend renewing your passport as soon as possible. Would you like me to provide information about expedited passport services?",
+                ReplyDate = DateTime.Now.AddHours(-7),
+                SentBy = "Maria Jensen",
+                IsFromCustomer = false
+            },
+            new InquiryReply
+            {
+                Id = 6,
+                InquiryId = 7,
+                Message = "Hello Robert, I've noted your nut allergy in your booking and have informed all hotels. They have confirmed they can accommodate this requirement. I recommend also mentioning this at check-in for each accommodation.",
+                ReplyDate = DateTime.Now.AddDays(-4).AddHours(2),
+                SentBy = "Peter Hansen",
+                IsFromCustomer = false
+            },
+            new InquiryReply
+            {
+                Id = 7,
+                InquiryId = 7,
+                Message = "Thank you for taking care of this. I appreciate your attention to this important detail.",
+                ReplyDate = DateTime.Now.AddDays(-4).AddHours(4),
+                SentBy = "Customer",
+                IsFromCustomer = true
+            }
+        };
+    }
+}
