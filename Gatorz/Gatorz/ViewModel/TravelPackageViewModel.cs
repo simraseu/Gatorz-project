@@ -8,6 +8,10 @@
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public decimal Price { get; set; }
+
+       
+        public string Description { get; set; } // <-- NEW DESCRIPTION FIELD
+
         public string Airline { get; set; }
         public string HotelName { get; set; }
         public int HotelRating { get; set; }

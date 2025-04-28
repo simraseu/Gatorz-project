@@ -1,62 +1,55 @@
 ﻿using Gatorz.Models;
+using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading.Tasks;
 
 namespace Gatorz.Services
 {
     public class FlightService : IFlightService
     {
-        // Mock implementation until you have a real API
-        public async Task<List<FlightInfo>> SearchFlightsAsync(string origin, string destination, DateTime departureDate)
-        {
-            // Simulates API call
-            await Task.Delay(500);
+        private readonly IHttpClientFactory _factory;
+        private readonly ITokenService _tokenService;
 
-            // Returns mock data
-            return new List<FlightInfo>
-            {
-                new FlightInfo
-                {
-                    Id = 1,
-                    FlightNumber = "SK123",
-                    Airline = "SAS",
-                    DepartureAirport = origin,
-                    ArrivalAirport = destination,
-                    DepartureTime = departureDate.AddHours(9),
-                    ArrivalTime = departureDate.AddHours(11),
-                    Price = 999
-                },
-                new FlightInfo
-                {
-                    Id = 2,
-                    FlightNumber = "DY456",
-                    Airline = "Norwegian",
-                    DepartureAirport = origin,
-                    ArrivalAirport = destination,
-                    DepartureTime = departureDate.AddHours(14),
-                    ArrivalTime = departureDate.AddHours(16),
-                    Price = 899
-                }
-            };
+        public FlightService(IHttpClientFactory factory, ITokenService tokenService)
+        {
+            _factory = factory;
+            _tokenService = tokenService;
         }
 
-        public async Task<FlightInfo> GetFlightDetailAsync(string flightId)
+        public async Task<List<FlightInfo>> SearchFlightsAsync(string origin, string destination, DateTime departureDate)
         {
-            // Simulates API call
-            await Task.Delay(300);
+            var token = await _tokenService.GetTokenAsync();
+            var client = _factory.CreateClient("AmadeusAPI");
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            // Returns mock data
-            return new FlightInfo
+            var url = $"/v2/shopping/flight-offers?originLocationCode={origin}&destinationLocationCode={destination}&departureDate={departureDate:yyyy-MM-dd}&adults=1&max=5";
+            var resp = await client.GetAsync(url);
+            resp.EnsureSuccessStatusCode();
+            var root = JObject.Parse(await resp.Content.ReadAsStringAsync());
+            var offers = root["data"] as JArray;
+            if (offers == null) return new List<FlightInfo>();
+
+            return offers.Select(o => new FlightInfo
             {
-                Id = int.Parse(flightId),
-                FlightNumber = "SK123",
-                Airline = "SAS",
-                DepartureAirport = "CPH",
-                ArrivalAirport = "LHR",
-                DepartureTime = DateTime.Now.AddDays(10).AddHours(9),
-                ArrivalTime = DateTime.Now.AddDays(10).AddHours(11),
-                Price = 999
-            };
+                Id = (int)o["id"],
+                FlightNumber = (string)o["itineraries"][0]["segments"][0]["carrierCode"] + (string)o["itineraries"][0]["segments"][0]["number"],
+                Airline = (string)o["itineraries"][0]["segments"][0]["carrierCode"],
+                DepartureAirport = (string)o["itineraries"][0]["segments"][0]["departure"]["iataCode"],
+                ArrivalAirport = (string)o["itineraries"][0]["segments"][0]["arrival"]["iataCode"],
+                DepartureTime = DateTime.Parse((string)o["itineraries"][0]["segments"][0]["departure"]["at"]),
+                ArrivalTime = DateTime.Parse((string)o["itineraries"][0]["segments"][0]["arrival"]["at"]),
+                Price = decimal.Parse((string)o["price"]["total"])
+            }).ToList();
+        }
+
+        public Task<FlightInfo> GetFlightDetailAsync(string flightId)
+        {
+            // Could reuse cached Search results or implement separately
+            throw new NotImplementedException();
         }
     }
 }

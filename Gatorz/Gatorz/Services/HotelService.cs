@@ -1,81 +1,56 @@
 ﻿using Gatorz.Models;
+using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading.Tasks;
 
 namespace Gatorz.Services
 {
     public class HotelService : IHotelService
     {
-        // Mock implementation until you have a real API
-        public async Task<List<HotelInfo>> SearchHotelsAsync(string location, DateTime checkIn, DateTime checkOut)
-        {
-            // Simulates API call
-            await Task.Delay(500);
+        private readonly IHttpClientFactory _factory;
+        private readonly ITokenService _tokenService;
 
-            // Returns mock data
-            return new List<HotelInfo>
-            {
-                new HotelInfo
-                {
-                    Id = 1,
-                    HotelName = "Grand Hotel",
-                    Address = "Main Street 123",
-                    City = location,
-                    Country = "Denmark",
-                    StarRating = 4,
-                    CheckInDate = checkIn,
-                    CheckOutDate = checkOut,
-                    RoomType = "Double Room",
-                    PricePerNight = 899
-                },
-                new HotelInfo
-                {
-                    Id = 2,
-                    HotelName = "Seaside Resort",
-                    Address = "Beach Road 45",
-                    City = location,
-                    Country = "Denmark",
-                    StarRating = 5,
-                    CheckInDate = checkIn,
-                    CheckOutDate = checkOut,
-                    RoomType = "Deluxe Suite",
-                    PricePerNight = 1499
-                },
-                new HotelInfo
-                {
-                    Id = 3,
-                    HotelName = "City Budget Hotel",
-                    Address = "Station Square 7",
-                    City = location,
-                    Country = "Denmark",
-                    StarRating = 3,
-                    CheckInDate = checkIn,
-                    CheckOutDate = checkOut,
-                    RoomType = "Single Room",
-                    PricePerNight = 599
-                }
-            };
+        public HotelService(IHttpClientFactory factory, ITokenService tokenService)
+        {
+            _factory = factory;
+            _tokenService = tokenService;
         }
 
-        public async Task<HotelInfo> GetHotelDetailAsync(string hotelId)
+        public async Task<List<HotelInfo>> SearchHotelsAsync(string cityCode, DateTime checkIn, DateTime checkOut)
         {
-            // Simulates API call
-            await Task.Delay(300);
+            var token = await _tokenService.GetTokenAsync();
+            var client = _factory.CreateClient("AmadeusAPI");
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-            // Returns mock data
-            return new HotelInfo
+            var url = $"/v2/shopping/hotel-offers?cityCode={cityCode}&checkInDate={checkIn:yyyy-MM-dd}&checkOutDate={checkOut:yyyy-MM-dd}&adults=1&roomQuantity=1";
+            var resp = await client.GetAsync(url);
+            resp.EnsureSuccessStatusCode();
+            var root = JObject.Parse(await resp.Content.ReadAsStringAsync());
+            var offers = root["data"] as JArray;
+            if (offers == null) return new List<HotelInfo>();
+
+            return offers.Select(o => new HotelInfo
             {
-                Id = int.Parse(hotelId),
-                HotelName = "Grand Hotel",
-                Address = "Main Street 123",
-                City = "Copenhagen",
-                Country = "Denmark",
-                StarRating = 4,
-                CheckInDate = DateTime.Now.AddDays(30),
-                CheckOutDate = DateTime.Now.AddDays(37),
-                RoomType = "Double Room",
-                PricePerNight = 899
-            };
+                Id = (int)o["hotel"]["hotelId"],
+                HotelName = (string)o["hotel"]["name"],
+                Address = ((JArray)o["hotel"]["address"]["lines"]).FirstOrDefault()?.ToString() ?? string.Empty,
+                City = (string)o["hotel"]["address"]["cityName"],
+                Country = (string)o["hotel"]["address"]["countryCode"],
+                StarRating = (int?)o["hotel"]["rating"] ?? 0,
+                CheckInDate = checkIn,
+                CheckOutDate = checkOut,
+                RoomType = (string)o["offers"][0]["room"],
+                PricePerNight = decimal.Parse((string)o["offers"][0]["price"]["base"])
+            }).ToList();
+        }
+
+        public Task<HotelInfo> GetHotelDetailAsync(string hotelId)
+        {
+            throw new NotImplementedException();
         }
     }
 }
