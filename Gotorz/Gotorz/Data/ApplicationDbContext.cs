@@ -23,7 +23,7 @@ namespace Gotorz.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // Decimal precision konfiguration
+            // Decimal precision configuration
             modelBuilder.Entity<Booking>()
                 .Property(b => b.TotalPrice)
                 .HasPrecision(18, 2);
