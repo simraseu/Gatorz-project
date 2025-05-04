@@ -24,8 +24,13 @@ namespace Gotorz.Data
         {
             base.OnModelCreating(builder);
 
+<<<<<<< HEAD
             // Configure decimal precision for price fields
             builder.Entity<Booking>()
+=======
+            // Decimal precision configuration
+            modelBuilder.Entity<Booking>()
+>>>>>>> cf46350 (Add submenu navigation for Admin, Sales and Customer roles)
                 .Property(b => b.TotalPrice)
                 .HasPrecision(18, 2);
 
