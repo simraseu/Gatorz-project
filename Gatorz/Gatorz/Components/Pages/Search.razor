@@ -3,6 +3,8 @@
 @using Gatorz.Services
 @inject ITravelPackageService TravelPackageService
 @inject NavigationManager NavigationManager
+@inject ILogger<Search> Logger
+@rendermode InteractiveServer
 
 <PageTitle>Search for Travel - Gatorz</PageTitle>
 
@@ -15,13 +17,13 @@
             <div class="col-md-6">
                 <div class="form-group mb-3">
                     <label for="origin" class="form-label">From:</label>
-                    <input id="origin" class="form-control" @bind="Origin" placeholder="Departure from..." />
+                    <input id="origin" class="form-control" @bind="Origin" placeholder="Departure from... (e.g., CPH)" />
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="form-group mb-3">
                     <label for="destination" class="form-label">To:</label>
-                    <input id="destination" class="form-control" @bind="Destination" placeholder="Destination..." />
+                    <input id="destination" class="form-control" @bind="Destination" placeholder="Destination... (e.g., BCN)" />
                 </div>
             </div>
         </div>
@@ -30,13 +32,13 @@
             <div class="col-md-6">
                 <div class="form-group mb-3">
                     <label for="departureDate" class="form-label">Departure date:</label>
-                    <input id="departureDate" type="date" class="form-control" @bind="DepartureDate" />
+                    <input id="departureDate" type="date" class="form-control" @bind="DepartureDate" min="@DateTime.Now.ToString("yyyy-MM-dd")" />
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="form-group mb-3">
                     <label for="returnDate" class="form-label">Return date:</label>
-                    <input id="returnDate" type="date" class="form-control" @bind="ReturnDate" />
+                    <input id="returnDate" type="date" class="form-control" @bind="ReturnDate" min="@DepartureDate.AddDays(1).ToString("yyyy-MM-dd")" />
                 </div>
             </div>
         </div>
@@ -51,6 +53,19 @@
     </div>
 </div>
 
+<!-- Debug Info Section - you can remove this in production -->
+<div class="mt-3 p-3 bg-light">
+    <h5>Debug Information</h5>
+    <p>Origin: @Origin</p>
+    <p>Destination: @Destination</p>
+    <p>Departure Date: @DepartureDate.ToString("yyyy-MM-dd")</p>
+    <p>Return Date: @ReturnDate.ToString("yyyy-MM-dd")</p>
+    <p>Has Searched: @hasSearched</p>
+    <p>Is Loading: @IsLoading</p>
+    <p>Error Message: @(ErrorMessage ?? "None")</p>
+    <p>Results Count: @TravelPackages.Count</p>
+</div>
+
 @if (IsLoading)
 {
     <div class="d-flex justify-content-center mt-5">
@@ -59,12 +74,19 @@
         </div>
     </div>
 }
-
-@if (!IsLoading && hasSearched && !TravelPackages.Any())
+else if (ErrorMessage != null)
+{
+    <div class="alert alert-danger mt-4">
+        <h4>Error Searching</h4>
+        <p>@ErrorMessage</p>
+    </div>
+}
+else if (hasSearched && !TravelPackages.Any())
 {
     <div class="alert alert-info mt-4">
         <h4>No travel packages found</h4>
         <p>We couldn't find any travel packages matching your criteria. Please try changing your search parameters.</p>
+        <p><strong>Tip:</strong> Make sure you're using airport codes (like CPH for Copenhagen, BCN for Barcelona, etc.) for best results.</p>
     </div>
 }
 
@@ -76,11 +98,6 @@
         {
             <div class="col-md-6 col-lg-4 mb-4">
                 <div class="card h-100 package-card">
-                    <div class="package-img" style="background-image: url('@package.ImageUrl')">
-                        <div class="package-overlay">
-                            <span class="package-price">From $@package.GetFormattedPrice()</span>
-                        </div>
-                    </div>
                     <div class="card-body">
                         <h5 class="card-title">@package.OriginCity to @package.Destination</h5>
                         <div class="mb-2">
@@ -115,6 +132,7 @@
     private DateTime ReturnDate { get; set; } = DateTime.Now.AddDays(14);
     private bool IsLoading { get; set; } = false;
     private bool hasSearched { get; set; } = false;
+    private string ErrorMessage { get; set; } = null;
     private List<TravelPackageViewModel> TravelPackages { get; set; } = new();
 
     protected override void OnInitialized()
@@ -125,18 +143,76 @@
         {
             Destination = destinationValue.ToString();
         }
+
+        Logger.LogInformation("Search page initialized");
     }
 
     private async Task SearchTravelPackages()
     {
-        if (string.IsNullOrWhiteSpace(Origin) || string.IsNullOrWhiteSpace(Destination))
+        Logger.LogInformation("Search button clicked");
+
+        // Clear any previous error
+        ErrorMessage = null;
+
+        // Validate input
+        if (string.IsNullOrWhiteSpace(Origin))
         {
+            ErrorMessage = "Please enter a departure city/airport code";
+            Logger.LogWarning("Error: Origin is empty");
             return;
         }
 
-        IsLoading = true;
-        TravelPackages = await TravelPackageService.SearchPackagesAsync(Origin, Destination, DepartureDate, ReturnDate);
-        IsLoading = false;
-        hasSearched = true;
+        if (string.IsNullOrWhiteSpace(Destination))
+        {
+            ErrorMessage = "Please enter a destination city/airport code";
+            Logger.LogWarning("Error: Destination is empty");
+            return;
+        }
+
+        if (DepartureDate < DateTime.Now.Date)
+        {
+            ErrorMessage = "Departure date cannot be in the past";
+            Logger.LogWarning("Error: Departure date is in the past");
+            return;
+        }
+
+        if (ReturnDate <= DepartureDate)
+        {
+            ErrorMessage = "Return date must be after departure date";
+            Logger.LogWarning("Error: Return date is not after departure date");
+            return;
+        }
+
+        try
+        {
+            IsLoading = true;
+            StateHasChanged(); // Update UI to show loading indicator
+
+            Logger.LogInformation($"Searching for packages: Origin={Origin}, Destination={Destination}, Departure={DepartureDate:yyyy-MM-dd}, Return={ReturnDate:yyyy-MM-dd}");
+
+            // Search for travel packages
+            TravelPackages = await TravelPackageService.SearchPackagesAsync(
+                Origin.Trim(),
+                Destination.Trim(),
+                DepartureDate,
+                ReturnDate);
+
+            Logger.LogInformation($"Search completed. Found {TravelPackages.Count} packages");
+
+            // Mark that we've performed a search
+            hasSearched = true;
+        }
+        catch (Exception ex)
+        {
+            // Handle exceptions
+            ErrorMessage = $"An error occurred: {ex.Message}";
+            Logger.LogError($"Error during search: {ex.Message}");
+            Logger.LogError($"Stack trace: {ex.StackTrace}");
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged(); // Update UI with results or error
+        }
     }
 }
