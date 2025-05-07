@@ -1,0 +1,113 @@
+﻿@page "/hotels/create"
+@rendermode InteractiveServer
+@using Gotorz.Data
+@using Gotorz.Services
+@inject HotelService HotelService
+@inject NavigationManager Navigation
+
+<h3>Opret nyt hotel</h3>
+
+<div class="alert alert-danger" style="@(errorMessage == null ? "display: none" : "")">
+    @errorMessage
+</div>
+
+<div class="hotel-form p-4 bg-white rounded shadow-sm">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="form-group mb-3">
+                <label for="name" class="form-label">Navn:</label>
+                <input id="name" class="form-control" @bind="hotel.Name" placeholder="Hotel navn..." required />
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-group mb-3">
+                <label for="address" class="form-label">Adresse:</label>
+                <input id="address" class="form-control" @bind="hotel.Address" placeholder="Adresse..." required />
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="form-group mb-3">
+                <label for="city" class="form-label">By:</label>
+                <input id="city" class="form-control" @bind="hotel.City" placeholder="By..." required />
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="form-group mb-3">
+                <label for="country" class="form-label">Land:</label>
+                <input id="country" class="form-control" @bind="hotel.Country" placeholder="Land..." required />
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="form-group mb-3">
+                <label for="apiHotelId" class="form-label">API Hotel ID (hvis vi vil hente priser senere):</label>
+                <input id="apiHotelId" class="form-control" @bind="hotel.ApiHotelId" placeholder="API Hotel ID..." required />
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-3">
+        <div class="col-6">
+            <button class="btn btn-primary w-100" @onclick="SaveHotel">
+                Gem hotel
+            </button>
+        </div>
+        <div class="col-6">
+            <button class="btn btn-secondary w-100" @onclick="GoBack">
+                Tilbage
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private Hotel hotel = new Hotel();
+    private string? errorMessage;
+
+    protected override void OnInitialized()
+    {
+        // Initialiserer modellen med tomme strenge
+        hotel.Name = string.Empty;
+        hotel.Address = string.Empty;
+        hotel.City = string.Empty;
+        hotel.Country = string.Empty;
+        hotel.ApiHotelId = string.Empty;
+    }
+
+    private async Task SaveHotel()
+    {
+        try
+        {
+            // Validering af input
+            if (string.IsNullOrWhiteSpace(hotel.Name) ||
+                string.IsNullOrWhiteSpace(hotel.Address) ||
+                string.IsNullOrWhiteSpace(hotel.City) ||
+                string.IsNullOrWhiteSpace(hotel.Country) ||
+                string.IsNullOrWhiteSpace(hotel.ApiHotelId))
+            {
+                errorMessage = "Alle felter skal udfyldes";
+                return;
+            }
+
+            // Gemmer hotellet
+            await HotelService.AddHotelAsync(hotel);
+            Navigation.NavigateTo("Sales/Dashboard");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Fejl ved oprettelse af hotel: {ex.Message}";
+            Console.WriteLine($"Fejl: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/Sales/Dashboard");
+    }
+}

@@ -1,0 +1,219 @@
+﻿@page "/admin/users"
+@using Microsoft.AspNetCore.Identity
+@using Gotorz.Data
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@rendermode InteractiveServer
+
+<PageTitle>User Management - Gotorz</PageTitle>
+
+<div class="container-fluid py-4">
+    <h1>User Management</h1>
+    <p class="lead">Manage users and their roles in the system.</p>
+
+    <div class="row mb-3">
+        <div class="col">
+            <input type="text" class="form-control" placeholder="Search by name or email" @bind="searchTerm" @bind:event="oninput" />
+        </div>
+    </div>
+
+    @if (users == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Roles</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var user in filteredUsers)
+                    {
+                        <tr>
+                            <td>@user.FirstName @user.LastName</td>
+                            <td>@user.Email</td>
+                            <td>
+                                @if (userRoles.ContainsKey(user.Id))
+                                {
+                                    @string.Join(", ", userRoles[user.Id])
+                                }
+                            </td>
+                            <td>
+                                <button class="btn btn-primary btn-sm" @onclick="() => ShowRoleModal(user)">Manage Roles</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (showRoleModal && selectedUser != null)
+    {
+        <div class="modal fade show" style="display: block;" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Manage Roles for @selectedUser.Email</h5>
+                        <button type="button" class="btn-close" @onclick="CloseRoleModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (roleError != null)
+                        {
+                            <div class="alert alert-danger">@roleError</div>
+                        }
+
+                        @if (roleSuccess != null)
+                        {
+                            <div class="alert alert-success">@roleSuccess</div>
+                        }
+
+                        <div class="list-group">
+                            @foreach (var role in availableRoles)
+                            {
+                                <div class="list-group-item">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input" id="@($"role_{role}")"
+                                               checked="@IsInRole(selectedUser.Id, role)"
+                                               @onchange="(e) => RoleCheckboxChanged(e, role)" />
+                                        <label class="form-check-label" for="@($"role_{role}")">@role</label>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseRoleModal">Close</button>
+                        <button type="button" class="btn btn-primary" @onclick="SaveRoles">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop fade show"></div>
+    }
+</div>
+
+@code {
+    private List<ApplicationUser> users;
+    private Dictionary<string, List<string>> userRoles = new();
+    private List<string> availableRoles = new();
+    private ApplicationUser selectedUser;
+    private Dictionary<string, bool> selectedRoles = new();
+    private bool showRoleModal = false;
+    private string searchTerm = "";
+    private string roleError;
+    private string roleSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        users = UserManager.Users.ToList();
+
+        // Get all available roles
+        availableRoles = RoleManager.Roles.Select(r => r.Name).ToList();
+
+        // Get roles for each user
+        foreach (var user in users)
+        {
+            var roles = await UserManager.GetRolesAsync(user);
+            userRoles[user.Id] = roles.ToList();
+        }
+    }
+
+    private List<ApplicationUser> filteredUsers =>
+        string.IsNullOrWhiteSpace(searchTerm)
+            ? users
+            : users.Where(u =>
+                (u.FirstName + " " + u.LastName).Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                u.Email.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private void ShowRoleModal(ApplicationUser user)
+    {
+        selectedUser = user;
+
+        // Reset selected roles
+        selectedRoles.Clear();
+
+        // Initialize with current roles
+        if (userRoles.ContainsKey(user.Id))
+        {
+            foreach (var role in availableRoles)
+            {
+                selectedRoles[role] = userRoles[user.Id].Contains(role);
+            }
+        }
+
+        showRoleModal = true;
+        roleError = null;
+        roleSuccess = null;
+    }
+
+    private void CloseRoleModal()
+    {
+        showRoleModal = false;
+    }
+
+    private bool IsInRole(string userId, string role)
+    {
+        return selectedRoles.ContainsKey(role) && selectedRoles[role];
+    }
+
+    private void RoleCheckboxChanged(ChangeEventArgs e, string role)
+    {
+        bool isChecked = (bool)e.Value;
+        selectedRoles[role] = isChecked;
+    }
+
+    private async Task SaveRoles()
+    {
+        roleError = null;
+        roleSuccess = null;
+
+        try
+        {
+            // Get current roles
+            var currentRoles = await UserManager.GetRolesAsync(selectedUser);
+
+            // Roles to remove
+            var rolesToRemove = currentRoles.Where(r => !selectedRoles.ContainsKey(r) || !selectedRoles[r]).ToList();
+            if (rolesToRemove.Any())
+            {
+                var removeResult = await UserManager.RemoveFromRolesAsync(selectedUser, rolesToRemove);
+                if (!removeResult.Succeeded)
+                {
+                    roleError = "Failed to remove roles: " + string.Join(", ", removeResult.Errors.Select(e => e.Description));
+                    return;
+                }
+            }
+
+            // Roles to add
+            var rolesToAdd = selectedRoles.Where(kvp => kvp.Value && !currentRoles.Contains(kvp.Key)).Select(kvp => kvp.Key).ToList();
+            if (rolesToAdd.Any())
+            {
+                var addResult = await UserManager.AddToRolesAsync(selectedUser, rolesToAdd);
+                if (!addResult.Succeeded)
+                {
+                    roleError = "Failed to add roles: " + string.Join(", ", addResult.Errors.Select(e => e.Description));
+                    return;
+                }
+            }
+
+            // Update userRoles dictionary
+            userRoles[selectedUser.Id] = selectedRoles.Where(kvp => kvp.Value).Select(kvp => kvp.Key).ToList();
+
+            roleSuccess = "Roles updated successfully!";
+        }
+        catch (Exception ex)
+        {
+            roleError = "An error occurred: " + ex.Message;
+        }
+    }
+}

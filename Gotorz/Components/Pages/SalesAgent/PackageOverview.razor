@@ -1,0 +1,82 @@
+﻿@page "/packages"
+
+
+@using Gotorz.Services
+@using Gotorz.Domain
+@using Gotorz.ViewModel
+@inject TravelpackageService TravelpackageService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<h3>Aktive pakkerejser</h3>
+
+<button class="btn btn-success mb-3" @onclick="NavigateToCreate">
+    + Opret ny pakke
+</button>
+
+@if (packages == null)
+{
+    <p><em>Indlæser...</em></p>
+}
+else if (!packages.Any())
+{
+    <p>Ingen rejsepakker fundet.</p>
+}
+else
+{
+    <div class="row row-cols-1 row-cols-md-2 g-4">
+        @foreach (var package in packages)
+        {
+            <div class="col">
+                <div class="card">
+                    <img src="@package.ImageUrl" class="card-img-top" alt="Billede" />
+                    <div class="card-body">
+                        <h5 class="card-title">@package.Destination</h5>
+                        <p class="card-text">
+                            @package.DepartureDate.ToShortDateString() - @package.ReturnDate.ToShortDateString()<br />
+                            Pris: <strong>@package.FinalPrice.ToString("C")</strong>
+                        </p>
+                        <button class="btn btn-primary me-2" @onclick="() => EditPackage(package.Id)">Rediger</button>
+                        <button class="btn btn-danger" @onclick="() => ConfirmDelete(package.Id)">Slet</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<TravelPackageViewModel>? packages;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPackages();
+    }
+
+    private async Task LoadPackages()
+    {
+        packages = await TravelpackageService.GetAllPackagesAsync();
+    }
+
+    private void NavigateToCreate()
+    {
+        Navigation.NavigateTo("/packages/create");
+    }
+
+    private void EditPackage(int id)
+    {
+        Navigation.NavigateTo($"/packages/edit/{id}");
+    }
+
+    private async Task ConfirmDelete(int id)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Er du sikker på, at du vil slette denne pakke?");
+        if (confirmed)
+        {
+            await TravelpackageService.DeletePackageAsync(id);
+            packages = await TravelpackageService.GetAllPackagesAsync(); // Opdater listen
+            StateHasChanged(); // Sikrer at UI re-rendres
+        }
+    }
+
+}

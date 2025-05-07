@@ -1,0 +1,583 @@
+﻿@page "/sales/notifications"
+@using Microsoft.AspNetCore.Authorization
+@using Gotorz.Data
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize(Roles = "SalesAgent,Admin")]
+@inject ApplicationDbContext DbContext
+@inject NavigationManager NavigationManager
+
+<PageTitle>Customer Notifications - Gotorz</PageTitle>
+
+<div class="container-fluid py-4">
+    <h1>Customer Notifications</h1>
+    <p class="lead">Send notifications to customers about their bookings and travel information</p>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">New Notification</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Recipients</label>
+                        <div class="d-flex">
+                            <select class="form-select" @bind="recipientType">
+                                <option value="booking">Specific Booking</option>
+                                <option value="customer">Specific Customer</option>
+                                <option value="destination">Destination</option>
+                                <option value="date">Travel Date</option>
+                                <option value="all">All Customers</option>
+                            </select>
+
+                            @if (recipientType == "booking")
+                            {
+                                <input type="text" class="form-control ms-2" placeholder="Enter Booking ID" @bind="bookingId" />
+                            }
+                            else if (recipientType == "customer")
+                            {
+                                <input type="text" class="form-control ms-2" placeholder="Enter Customer ID or Email" @bind="customerId" />
+                            }
+                            else if (recipientType == "destination")
+                            {
+                                <select class="form-select ms-2" @bind="destinationFilter">
+                                    <option value="">Select Destination</option>
+                                    <option value="Barcelona">Barcelona</option>
+                                    <option value="Rome">Rome</option>
+                                    <option value="Paris">Paris</option>
+                                    <option value="London">London</option>
+                                    <option value="Dubai">Dubai</option>
+                                </select>
+                            }
+                            else if (recipientType == "date")
+                            {
+                                <input type="date" class="form-control ms-2" @bind="travelDateStart" />
+                                <input type="date" class="form-control ms-2" @bind="travelDateEnd" />
+                            }
+                        </div>
+                        <small class="text-muted">
+                            @GetRecipientsDescription()
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Notification Type</label>
+                        <select class="form-select" @bind="notificationType">
+                            <option value="email">Email</option>
+                            <option value="sms">SMS</option>
+                            <option value="both">Email & SMS</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Subject</label>
+                        <input type="text" class="form-control" placeholder="Enter notification subject" @bind="notificationSubject" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Message</label>
+                        <textarea class="form-control" rows="8" placeholder="Enter your message here..." @bind="notificationMessage"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Template</label>
+                        <select class="form-select" @bind="selectedTemplate" @bind:after="ApplyTemplate">
+                            <option value="">Select a template</option>
+                            <option value="flight_change">Flight Change Notification</option>
+                            <option value="hotel_change">Hotel Change Notification</option>
+                            <option value="travel_tips">Travel Tips</option>
+                            <option value="payment_reminder">Payment Reminder</option>
+                            <option value="travel_document">Travel Document Reminder</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Schedule</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="schedule" id="sendNow" value="now" checked @onchange="e => isScheduled = false" />
+                            <label class="form-check-label" for="sendNow">
+                                Send immediately
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="schedule" id="scheduleLater" value="later" @onchange="e => isScheduled = true" />
+                            <label class="form-check-label" for="scheduleLater">
+                                Schedule for later
+                            </label>
+                        </div>
+
+                        @if (isScheduled)
+                        {
+                            <div class="row mt-2">
+                                <div class="col-md-6">
+                                    <input type="date" class="form-control" @bind="scheduledDate" />
+                                </div>
+                                <div class="col-md-6">
+                                    <input type="time" class="form-control" @bind="scheduledTime" />
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="d-grid">
+                        <button class="btn btn-primary" @onclick="SendNotification">
+                            @(isScheduled ? "Schedule Notification" : "Send Notification")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Recent Notifications</h5>
+                </div>
+                <div class="card-body">
+                    @if (sentNotifications.Any())
+                    {
+                        <div class="list-group">
+                            @foreach (var notification in sentNotifications.OrderByDescending(n => n.SentDate).Take(5))
+                            {
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between">
+                                        <h6 class="mb-1">@notification.Subject</h6>
+                                        <small class="text-muted">@notification.SentDate.ToString("MM/dd HH:mm")</small>
+                                    </div>
+                                    <p class="mb-1">@(notification.Message.Length > 50 ? notification.Message.Substring(0, 50) + "..." : notification.Message)</p>
+                                    <small class="text-muted">
+                                        Sent to @notification.RecipientCount recipients
+                                        via @notification.NotificationType.ToUpper()
+                                    </small>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-grid mt-3">
+                            <a href="/sales/notifications/history" class="btn btn-outline-primary">View All</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No notifications sent recently.</p>
+                    }
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Scheduled Notifications</h5>
+                </div>
+                <div class="card-body">
+                    @if (scheduledNotifications.Any())
+                    {
+                        <div class="list-group">
+                            @foreach (var notification in scheduledNotifications.OrderBy(n => n.ScheduledDate))
+                            {
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between">
+                                        <h6 class="mb-1">@notification.Subject</h6>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelScheduledNotification(notification)">
+                                            <i class="bi bi-x"></i>
+                                        </button>
+                                    </div>
+                                    <p class="mb-1">@(notification.Message.Length > 50 ? notification.Message.Substring(0, 50) + "..." : notification.Message)</p>
+                                    <small class="text-muted">
+                                        Scheduled for @notification.ScheduledDate?.ToString("MM/dd/yyyy HH:mm")
+                                    </small>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">No scheduled notifications.</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (showConfirmationModal)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Notification</h5>
+                    <button type="button" class="btn-close" @onclick="() => showConfirmationModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p>You are about to send a notification to <strong>@estimatedRecipients recipients</strong>.</p>
+                    <p>Please confirm that you want to proceed.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showConfirmationModal = false">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="ConfirmSendNotification">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@if (showSuccessModal)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Success</h5>
+                    <button type="button" class="btn-close" @onclick="() => showSuccessModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    @if (isScheduled)
+                    {
+                        <p>Your notification has been scheduled successfully.</p>
+                        <p>It will be sent on @scheduledDate.ToString("MMMM d, yyyy") at @scheduledTime.ToString("HH:mm")</p>
+                    }
+                    else
+                    {
+                        <p>Your notification has been sent successfully to @estimatedRecipients recipients.</p>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" @onclick="() => showSuccessModal = false">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    // Notification model
+    private class CustomerNotification
+    {
+        public int Id { get; set; }
+        public string Subject { get; set; }
+        public string Message { get; set; }
+        public string NotificationType { get; set; } // email, sms, both
+        public DateTime SentDate { get; set; }
+        public DateTime? ScheduledDate { get; set; }
+        public string RecipientType { get; set; } // booking, customer, destination, date, all
+        public string RecipientFilter { get; set; }
+        public int RecipientCount { get; set; }
+        public string SentBy { get; set; }
+    }
+
+    // Form fields
+    private string recipientType = "booking";
+    private string bookingId = "";
+    private string customerId = "";
+    private string destinationFilter = "";
+    private DateTime travelDateStart = DateTime.Now.AddDays(7);
+    private DateTime travelDateEnd = DateTime.Now.AddDays(14);
+    private string notificationType = "email";
+    private string notificationSubject = "";
+    private string notificationMessage = "";
+    private string selectedTemplate = "";
+    private bool isScheduled = false;
+    private DateTime scheduledDate = DateTime.Now.AddDays(1);
+    private TimeOnly scheduledTime = new TimeOnly(9, 0); // 9:00 AM
+
+    // Modals
+    private bool showConfirmationModal = false;
+    private bool showSuccessModal = false;
+    private int estimatedRecipients = 0;
+
+    // Data lists
+    private List<CustomerNotification> sentNotifications = new List<CustomerNotification>();
+    private List<CustomerNotification> scheduledNotifications = new List<CustomerNotification>();
+
+    protected override void OnInitialized()
+    {
+        // Create mock data
+        sentNotifications = CreateMockSentNotifications();
+        scheduledNotifications = CreateMockScheduledNotifications();
+    }
+
+    private string GetRecipientsDescription()
+    {
+        switch (recipientType)
+        {
+            case "booking":
+                return string.IsNullOrEmpty(bookingId)
+                    ? "Enter a booking ID to send to specific booking customers"
+                    : $"Will send to customers with booking ID {bookingId}";
+            case "customer":
+                return string.IsNullOrEmpty(customerId)
+                    ? "Enter a customer ID or email to send to a specific customer"
+                    : $"Will send to customer {customerId}";
+            case "destination":
+                return string.IsNullOrEmpty(destinationFilter)
+                    ? "Select a destination to send to all customers traveling there"
+                    : $"Will send to all customers traveling to {destinationFilter}";
+            case "date":
+                return $"Will send to all customers traveling between {travelDateStart:MM/dd/yyyy} and {travelDateEnd:MM/dd/yyyy}";
+            case "all":
+                return "Will send to ALL customers - use with caution";
+            default:
+                return "";
+        }
+    }
+
+    private void ApplyTemplate()
+    {
+        switch (selectedTemplate)
+        {
+            case "flight_change":
+                notificationSubject = "Important: Change to Your Flight Schedule";
+                notificationMessage = "Dear Customer,\n\nWe need to inform you about a change to your flight schedule. Your flight details have been updated as follows:\n\n[FLIGHT DETAILS]\n\nPlease check your booking details in your account or contact our support team if you have any questions.\n\nBest regards,\nGatorz Travel Team";
+                break;
+            case "hotel_change":
+                notificationSubject = "Update to Your Hotel Reservation";
+                notificationMessage = "Dear Customer,\n\nThere has been a change to your hotel accommodation. Your updated hotel details are as follows:\n\n[HOTEL DETAILS]\n\nWe apologize for any inconvenience this may cause. Please contact us if you have any concerns about these changes.\n\nBest regards,\nGatorz Travel Team";
+                break;
+            case "travel_tips":
+                notificationSubject = "Travel Tips for Your Upcoming Trip";
+                notificationMessage = "Dear Customer,\n\nYour trip is approaching! Here are some helpful tips for your journey:\n\n1. Check the weather forecast before packing\n2. Ensure your passport is valid for at least 6 months beyond your travel dates\n3. Arrive at the airport at least 2 hours before departure\n4. Keep your travel documents easily accessible\n5. Make copies of important documents\n\nWe wish you a pleasant journey!\n\nBest regards,\nGatorz Travel Team";
+                break;
+            case "payment_reminder":
+                notificationSubject = "Payment Reminder for Your Booking";
+                notificationMessage = "Dear Customer,\n\nThis is a friendly reminder that the final payment for your booking is due soon. Please ensure that payment is made by the due date to avoid any issues with your reservation.\n\nBooking Reference: [BOOKING ID]\nAmount Due: [AMOUNT]\nDue Date: [DATE]\n\nYou can make the payment through our website or contact our customer support team for assistance.\n\nBest regards,\nGatorz Travel Team";
+                break;
+            case "travel_document":
+                notificationSubject = "Important: Travel Document Reminder";
+                notificationMessage = "Dear Customer,\n\nYour trip is approaching, and we'd like to remind you about the necessary travel documents:\n\n- Valid passport\n- Visa (if required)\n- Travel insurance\n- Booking confirmation\n- Hotel vouchers\n\nPlease ensure you have all required documents ready before your departure date. Contact us if you need any assistance.\n\nBest regards,\nGatorz Travel Team";
+                break;
+        }
+    }
+
+    private void SendNotification()
+    {
+        // Validate form
+        if (string.IsNullOrWhiteSpace(notificationSubject) || string.IsNullOrWhiteSpace(notificationMessage))
+        {
+            // Show validation error
+            return;
+        }
+
+        // Estimate recipients
+        EstimateRecipients();
+
+        // Show confirmation modal
+        showConfirmationModal = true;
+    }
+
+    private void EstimateRecipients()
+    {
+        // In a real application, you would query the database to count recipients
+        // Here we'll use mock data
+        switch (recipientType)
+        {
+            case "booking":
+                estimatedRecipients = 1;
+                break;
+            case "customer":
+                estimatedRecipients = 1;
+                break;
+            case "destination":
+                estimatedRecipients = destinationFilter switch
+                {
+                    "Barcelona" => 28,
+                    "Rome" => 22,
+                    "Paris" => 15,
+                    "London" => 12,
+                    "Dubai" => 18,
+                    _ => 0
+                };
+                break;
+            case "date":
+                // Calculate days between dates
+                int days = (int)(travelDateEnd - travelDateStart).TotalDays;
+                // Estimate 2-5 bookings per day
+                estimatedRecipients = days * new Random().Next(2, 6);
+                break;
+            case "all":
+                estimatedRecipients = 125; // Mock total
+                break;
+            default:
+                estimatedRecipients = 0;
+                break;
+        }
+    }
+
+    private void ConfirmSendNotification()
+    {
+        // In a real application, you would send or schedule the notification here
+
+        // Add to appropriate list
+        if (isScheduled)
+        {
+            // Combine date and time
+            DateTime scheduledDateTime = scheduledDate.Date.Add(scheduledTime.ToTimeSpan());
+
+            scheduledNotifications.Add(new CustomerNotification
+                {
+                    Id = scheduledNotifications.Count + 100,
+                    Subject = notificationSubject,
+                    Message = notificationMessage,
+                    NotificationType = notificationType,
+                    SentDate = DateTime.MinValue,
+                    ScheduledDate = scheduledDateTime,
+                    RecipientType = recipientType,
+                    RecipientFilter = GetRecipientFilter(),
+                    RecipientCount = estimatedRecipients,
+                    SentBy = "Sales Agent"
+                });
+        }
+        else
+        {
+            sentNotifications.Add(new CustomerNotification
+                {
+                    Id = sentNotifications.Count + 100,
+                    Subject = notificationSubject,
+                    Message = notificationMessage,
+                    NotificationType = notificationType,
+                    SentDate = DateTime.Now,
+                    ScheduledDate = null,
+                    RecipientType = recipientType,
+                    RecipientFilter = GetRecipientFilter(),
+                    RecipientCount = estimatedRecipients,
+                    SentBy = "Sales Agent"
+                });
+        }
+
+        // Close confirmation modal and show success
+        showConfirmationModal = false;
+        showSuccessModal = true;
+
+        // Reset form
+        ResetForm();
+    }
+
+    private string GetRecipientFilter()
+    {
+        return recipientType switch
+        {
+            "booking" => bookingId,
+            "customer" => customerId,
+            "destination" => destinationFilter,
+            "date" => $"{travelDateStart:yyyy-MM-dd} to {travelDateEnd:yyyy-MM-dd}",
+            "all" => "All Customers",
+            _ => ""
+        };
+    }
+
+    private void CancelScheduledNotification(CustomerNotification notification)
+    {
+        scheduledNotifications.Remove(notification);
+        StateHasChanged();
+    }
+
+    private void ResetForm()
+    {
+        recipientType = "booking";
+        bookingId = "";
+        customerId = "";
+        destinationFilter = "";
+        travelDateStart = DateTime.Now.AddDays(7);
+        travelDateEnd = DateTime.Now.AddDays(14);
+        notificationType = "email";
+        notificationSubject = "";
+        notificationMessage = "";
+        selectedTemplate = "";
+        isScheduled = false;
+        scheduledDate = DateTime.Now.AddDays(1);
+        scheduledTime = new TimeOnly(9, 0);
+    }
+
+    // Create mock data for demonstration
+    private List<CustomerNotification> CreateMockSentNotifications()
+    {
+        return new List<CustomerNotification>
+        {
+            new CustomerNotification
+            {
+                Id = 1,
+                Subject = "Important Update to Your Barcelona Trip",
+                Message = "Dear Customer, we're writing to inform you about some changes to your upcoming trip to Barcelona...",
+                NotificationType = "email",
+                SentDate = DateTime.Now.AddDays(-2),
+                ScheduledDate = null,
+                RecipientType = "destination",
+                RecipientFilter = "Barcelona",
+                RecipientCount = 28,
+                SentBy = "Maria Jensen"
+            },
+            new CustomerNotification
+            {
+                Id = 2,
+                Subject = "Your Flight Has Been Changed",
+                Message = "Dear Customer, the airline has informed us of a change to your flight schedule...",
+                NotificationType = "both",
+                SentDate = DateTime.Now.AddDays(-1),
+                ScheduledDate = null,
+                RecipientType = "booking",
+                RecipientFilter = "1001",
+                RecipientCount = 1,
+                SentBy = "Peter Hansen"
+            },
+            new CustomerNotification
+            {
+                Id = 3,
+                Subject = "Prepare for Your Trip - Important Information",
+                Message = "Dear Customer, your trip is approaching! Here are some important details to ensure everything goes smoothly...",
+                NotificationType = "email",
+                SentDate = DateTime.Now.AddHours(-5),
+                ScheduledDate = null,
+                RecipientType = "date",
+                RecipientFilter = "2025-05-01 to 2025-05-07",
+                RecipientCount = 12,
+                SentBy = "Sales Agent"
+            },
+            new CustomerNotification
+            {
+                Id = 4,
+                Subject = "Special Offer for Your Next Booking",
+                Message = "Dear Valued Customer, as a thank you for your loyalty, we're pleased to offer you a special discount on your next booking...",
+                NotificationType = "email",
+                SentDate = DateTime.Now.AddDays(-3),
+                ScheduledDate = null,
+                RecipientType = "all",
+                RecipientFilter = "All Customers",
+                RecipientCount = 125,
+                SentBy = "Marketing Team"
+            }
+        };
+    }
+
+    private List<CustomerNotification> CreateMockScheduledNotifications()
+    {
+        return new List<CustomerNotification>
+        {
+            new CustomerNotification
+            {
+                Id = 101,
+                Subject = "Your Trip is Coming Soon - Final Reminder",
+                Message = "Dear Customer, your trip to Rome is only one week away! Here's a reminder of what to prepare...",
+                NotificationType = "email",
+                SentDate = DateTime.MinValue,
+                ScheduledDate = DateTime.Now.AddDays(2),
+                RecipientType = "date",
+                RecipientFilter = "2025-05-10 to 2025-05-17",
+                RecipientCount = 8,
+                SentBy = "Sales Agent"
+            },
+            new CustomerNotification
+            {
+                Id = 102,
+                Subject = "Important Travel Document Reminder",
+                Message = "Dear Customer, please remember to bring your passport and other essential travel documents for your upcoming trip...",
+                NotificationType = "both",
+                SentDate = DateTime.MinValue,
+                ScheduledDate = DateTime.Now.AddDays(1),
+                RecipientType = "destination",
+                RecipientFilter = "Dubai",
+                RecipientCount = 18,
+                SentBy = "Sales Agent"
+            }
+        };
+    }
+}

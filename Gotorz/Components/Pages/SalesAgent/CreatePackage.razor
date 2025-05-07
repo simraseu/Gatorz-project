@@ -1,0 +1,422 @@
+﻿@page "/packages/create"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Gotorz.Services
+@using Gotorz.ViewModel
+@using Microsoft.AspNetCore.Authorization
+@using Gotorz.Data
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize(Roles = "SalesAgent,Admin")]
+@inject TravelpackageService TravelpackageService
+@inject HotelService HotelService
+@inject HotelApiService HotelApiService
+@inject NavigationManager Navigation
+
+<h3>Opret ny rejsepakke</h3>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-warning" role="alert">
+        @errorMessage
+    </div>
+}
+
+<form @onsubmit="HandleCreatePackage" @onsubmit:preventDefault>
+    <div class="container mt-3">
+        <div class="row">
+            <!-- Venstre kolonne -->
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label>Destination</label>
+                    <input type="text" @bind="formModel.Destination" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Afrejsedato</label>
+                    <input type="date" @bind="formModel.DepartureDate" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Returdato</label>
+                    <input type="date" @bind="formModel.ReturnDate" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Afgangslufthavn</label>
+                    <input type="text" @bind="formModel.OriginAirport" class="form-control" placeholder="f.eks. CPH" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Valuta</label>
+                    <input type="text" @bind="formModel.Currency" class="form-control" placeholder="f.eks. USD" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Antal voksne</label>
+                    <input type="number" @bind="formModel.Adults" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Antal børn</label>
+                    <input type="number" @bind="formModel.Kids" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Antal værelser</label>
+                    <input type="number" @bind="formModel.Rooms" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Vælg hotel</label>
+                    <select value="@formModel.SelectedHotelId" @onchange="OnHotelSelected" class="form-control">
+                        <option value="">-- Vælg hotel --</option>
+                        @foreach (var hotel in formModel.AvailableHotels)
+                        {
+                            <option value="@hotel.Id">@hotel.Name (@hotel.City)</option>
+                        }
+                    </select>
+                </div>
+
+                @if (formModel.AvailableRooms.Any())
+                {
+                    <div class="mb-3">
+                        <label>Vælg værelse:</label>
+                        <select value="@formModel.SelectedRoomType" @onchange="OnRoomSelected" class="form-control">
+                            <option value="">-- Vælg værelse --</option>
+                            @foreach (var room in formModel.AvailableRooms)
+                            {
+                                <option value="@room">@room</option>
+                            }
+                        </select>
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label>Pris på valgt værelse:</label>
+                    @if (formModel.HotelPrice.HasValue)
+                    {
+                        <div class="form-control">
+                            @formModel.HotelPrice.Value.ToString("C")
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="form-control text-muted">Ingen pris tilgængelig</div>
+                    }
+                </div>
+
+                <div class="mb-3">
+                    <label>Beskrivelse</label>
+                    <textarea @bind="formModel.Description" class="form-control"></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label>Billede (URL)</label>
+                    <input type="text" @bind="formModel.ImageUrl" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Pris (manuelt, valgfrit)</label>
+                    <input type="number" @bind="formModel.ManualPriceOverride" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Påslag i %</label>
+                    <input type="number" @bind="formModel.MarkupPercent" class="form-control" />
+                </div>
+
+                <div class="d-flex mb-3">
+                    <button class="btn btn-warning me-2" type="button" @onclick="LoadHotelPriceAndRooms">
+                        🔍 Hent hotelpris/værelser
+                    </button>
+
+                    <button class="btn btn-primary" type="button" @onclick="LoadFlights">
+                        ✈️ Hent flymuligheder
+                    </button>
+                </div>
+
+                <button class="btn btn-primary" type="submit">Gem pakke</button>
+            </div>
+
+            <!-- Højre kolonne -->
+            <div class="col-md-6">
+                @if (formModel.AvailableFlights.Count > 0)
+                {
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        @for (int i = 0; i < formModel.AvailableFlights.Count; i++)
+                        {
+                            var f = formModel.AvailableFlights[i];
+                            <div class="card mb-2 @(formModel.SelectedFlightIndex == i ? "border-primary" : "")"
+                            @onclick="@(() => SelectFlight(i))"
+                            style="cursor: pointer;">
+                                <div class="card-body">
+                                    <p><strong>Flyselskab:</strong> @f.Airline</p>
+
+                                    <ul class="list-unstyled">
+                                        @foreach (var flightSegment in f.Flights)
+                                        {
+                                            <li>@flightSegment</li>
+                                        }
+                                    </ul>
+
+                                    <p><strong>Samlet varighed:</strong> @f.Duration</p>
+                                    <p><strong>Pris:</strong> @f.Price</p>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (formModel.SelectedHotel != null)
+                {
+                    <div class="card mb-3">
+                        <div class="card-header bg-success text-white">Hotelinformation</div>
+                        <div class="card-body">
+                            <p><strong>@formModel.SelectedHotel.Name</strong></p>
+                            <p>@formModel.SelectedHotel.Address</p>
+                            <p>
+                                Fra-pris:
+                                @(formModel.HotelPrice.HasValue
+                                        ? formModel.HotelPrice.Value.ToString("C")
+                                        : "Ikke tilgængelig")
+                            </p>
+                        </div>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(bestVendorName))
+                {
+                    <div class="mt-2">
+                        <strong>Billigste fundet hos:</strong> @bestVendorName til <strong>@bestVendorPrice.ToString("C")</strong>
+                    </div>
+                }
+
+                <div class="alert alert-info mt-3">
+                    <strong>Slutpris (med evt. påslag):</strong> @formModel.FinalPrice.ToString("C")
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@code {
+    private TravelPackageFormViewModel formModel = new();
+    private string? errorMessage;
+    private string bestVendorName = string.Empty;
+    private decimal bestVendorPrice = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        formModel.AvailableHotels = await HotelService.GetAllHotelsAsync();
+    }
+
+    private async Task LoadHotelPriceAndRooms()
+    {
+        await OnHotelSelected(new ChangeEventArgs { Value = formModel.SelectedHotelId });
+    }
+
+    private void UpdateHotelPrice()
+    {
+        RecalculateFinalPrice();
+    }
+
+    private async Task OnHotelSelected(ChangeEventArgs e)
+    {
+        Console.WriteLine($"🏨 OnHotelSelected kaldt med værdi: {e.Value}");
+
+        // Tilføj denne linje til at opdatere SelectedHotelId for binding
+        formModel.SelectedHotelId = int.TryParse(e.Value?.ToString(), out var hotelId) ? hotelId : 0;
+
+
+        // Behold din originale parse-metode som virkede
+        var selectedId = int.Parse(e.Value?.ToString() ?? "0");
+
+        formModel.SelectedHotel = await HotelService.GetHotelDetailsAsync(selectedId);
+
+        if (formModel.SelectedHotel == null)
+            return;
+
+        DTOs.HotelPriceResponseDto hotelPriceResponseDto = await HotelApiService.SearchHotelPricesAsync(
+                    formModel.SelectedHotel.Country,
+                    formModel.SelectedHotel.ApiHotelId,
+                    formModel.DepartureDate,
+                    formModel.ReturnDate,
+                    formModel.Currency,
+                    formModel.Adults,
+                    formModel.Kids,
+                    formModel.Rooms
+                );
+        var hotelApiResult = hotelPriceResponseDto; // Her manglede et semikolon
+
+        if (hotelApiResult?.Comparison != null && hotelApiResult.Comparison.Any())
+        {
+            var flatList = hotelApiResult.Comparison.FirstOrDefault();
+            if (flatList != null)
+            {
+                foreach (var vendorEntry in flatList)
+                {
+                    if (vendorEntry.TryGetValue("vendor2", out var vendorName) && vendorName == "Booking.com")
+                    {
+                        if (vendorEntry.TryGetValue("price2", out var priceStr) && !string.IsNullOrWhiteSpace(priceStr))
+                        {
+                            if (decimal.TryParse(priceStr.Replace("$", "").Trim(), out var price))
+                            {
+                                bestVendorName = vendorName;
+                                bestVendorPrice = price;
+                                formModel.HotelPrice = price;
+                            }
+                        }
+                        break; // Stop efter Booking.com
+                    }
+                }
+            }
+
+            // Tilføj værelser hvis tilgængelige
+            formModel.AvailableRooms = hotelApiResult.Rooms.Select(r => r.Room).ToList();
+        }
+        else
+        {
+            bestVendorName = string.Empty;
+            bestVendorPrice = 0;
+            formModel.HotelPrice = null;
+            formModel.AvailableRooms = new List<string>();
+        }
+
+        RecalculateFinalPrice();
+        StateHasChanged();
+    } // Der var et ekstra semikolon her
+
+    private void OnRoomSelected(ChangeEventArgs e)
+    {
+        formModel.SelectedRoomType = e.Value?.ToString();
+        // Eventuelt genberegn pris hvis vi har mere avanceret senere
+        RecalculateFinalPrice();
+    }
+
+    private decimal ParsePrice(string? priceString)
+    {
+        if (decimal.TryParse(priceString?.Replace("USD", "").Replace(",", "").Trim(), out var price))
+            return price;
+        return 0;
+    }
+
+    private string? GetLowestVendorPrice(List<List<Dictionary<string, string>>> comparison)
+    {
+        var flatList = comparison.FirstOrDefault();
+        if (flatList == null) return null;
+
+        var prices = new List<decimal>();
+
+        foreach (var vendorEntry in flatList)
+        {
+            foreach (var kvp in vendorEntry)
+            {
+                if (kvp.Key.StartsWith("price") &&
+                    decimal.TryParse(kvp.Value?.Replace("$", "").Replace(",", "").Trim(), out var parsedPrice))
+                {
+                    prices.Add(parsedPrice);
+                }
+            }
+        }
+
+        return prices.Any() ? prices.Min().ToString("0.00") : null;
+    }
+
+    private (string VendorName, decimal Price) GetLowestVendorAndPrice(List<List<Dictionary<string, string>>> comparison)
+    {
+        var flatList = comparison.FirstOrDefault();
+        if (flatList == null) return ("", 0);
+
+        string bestVendor = "";
+        decimal lowestPrice = decimal.MaxValue;
+
+        foreach (var vendorEntry in flatList)
+        {
+            foreach (var kvp in vendorEntry)
+            {
+                if (kvp.Key.StartsWith("price") && decimal.TryParse(kvp.Value?.Replace("$", "").Replace(",", ""), out var price))
+                {
+                    if (price < lowestPrice)
+                    {
+                        lowestPrice = price;
+
+                        // Find vendor-navn
+                        var vendorKey = "vendor" + kvp.Key.Replace("price", "");
+                        vendorEntry.TryGetValue(vendorKey, out bestVendor);
+                    }
+                }
+            }
+        }
+
+        return (bestVendor, lowestPrice);
+    }
+
+    private async Task LoadFlights()
+    {
+        errorMessage = null;
+
+        if (formModel.DepartureDate == default || formModel.ReturnDate == default)
+        {
+            errorMessage = "❗ Du skal vælge både afrejsedato og returdato, før du kan hente fly.";
+            return;
+        }
+
+        // Ændret for at modtage List<FlightPackageViewModel> direkte
+        var availableFlights = await TravelpackageService.CreateFlightOptionsAsync(
+            formModel.OriginAirport,
+            formModel.Destination,
+            formModel.DepartureDate,
+            formModel.ReturnDate,
+            formModel.Currency);
+
+        if (availableFlights != null && availableFlights.Any())
+        {
+            formModel.AvailableFlights = availableFlights;
+            formModel.SelectedFlightIndex = 0;
+            RecalculateFinalPrice();
+        }
+    }
+
+    private void RecalculateFinalPrice()
+    {
+        decimal flightPrice = 0;
+
+        if (formModel.AvailableFlights != null &&
+            formModel.AvailableFlights.Count > 0 &&
+            formModel.SelectedFlightIndex >= 0 &&
+            formModel.SelectedFlightIndex < formModel.AvailableFlights.Count)
+        {
+            var selectedFlight = formModel.AvailableFlights[formModel.SelectedFlightIndex];
+            if (decimal.TryParse(selectedFlight?.Price?.Replace("USD", "").Replace(",", "").Trim(), out var parsedFlightPrice))
+            {
+                flightPrice = parsedFlightPrice;
+            }
+        }
+
+        // Vi gemmer flyprisen på formModel
+        formModel.FlightPrice = flightPrice.ToString("F2");
+    }
+
+    private async Task HandleCreatePackage()
+    {
+        try
+        {
+            formModel.FlightPackage = formModel.AvailableFlights.ElementAtOrDefault(formModel.SelectedFlightIndex);
+            await TravelpackageService.SaveTravelPackageAsync(formModel);
+            Navigation.NavigateTo("/Sales/dashboard");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Fejl ved oprettelse af pakke: {ex.Message}";
+            Console.WriteLine($"Fejl: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
+        }
+    }
+
+    private void SelectFlight(int index)
+    {
+        formModel.SelectedFlightIndex = index;
+        RecalculateFinalPrice();
+    }
+}

@@ -1,0 +1,121 @@
+﻿.package-hero-img {
+    height: 300px;
+    background-size: cover;
+    background-position: center;
+    border-radius: 0.25rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.package-title {
+    margin-bottom: 1.5rem;
+}
+
+.package-price-tag {
+    background-color: #f8f9fa;
+    padding: 0.75rem;
+    border-radius: 0.25rem;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.price-label {
+    display: block;
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.price-value {
+    display: block;
+    font-size: 1.75rem;
+    font-weight: bold;
+    color: #0d6efd;
+}
+
+.package-detail-section {
+    margin-bottom: 1.5rem;
+}
+
+h4 {
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+}
+
+.detail-label {
+    color: #6c757d;
+}
+
+.detail-value {
+    font-weight: 500;
+}
+
+.hotel-stars {
+    color: #ffc107;
+}
+
+.package-features {
+    list-style: none;
+    padding-left: 0;
+}
+
+    .package-features li {
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: flex-start;
+    }
+
+        .package-features li i {
+            margin-right: 0.5rem;
+            margin-top: 0.2rem;
+            color: #0d6efd;
+        }
+
+.booking-card {
+    position: sticky;
+    top: 2rem;
+}
+
+.price-summary {
+    margin-bottom: 1.5rem;
+}
+
+.price-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.price-total {
+    display: flex;
+    justify-content: space-between;
+    padding: 1rem 0;
+    font-weight: bold;
+    font-size: 1.2rem;
+    border-top: 2px solid #0d6efd;
+    margin-top: 0.5rem;
+}
+
+.booking-info {
+    border-top: 1px solid #e9ecef;
+    padding-top: 1rem;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+    .info-item i {
+        margin-right: 0.5rem;
+    }
