@@ -2,10 +2,13 @@ using Gotorz.Client.Pages;
 using Gotorz.Components;
 using Gotorz.Components.Account;
 using Gotorz.Data;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Gotorz.Services;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.SignalR.Client;
 
 namespace Gotorz
 {
@@ -32,6 +35,8 @@ namespace Gotorz
             builder.Services.AddScoped<IFlightService, FlightService>();
             builder.Services.AddScoped<IHotelService, HotelService>();
             builder.Services.AddScoped<ITravelPackageService, TravelPackageService>();
+            builder.Services.AddScoped<ChatHub>();
+            builder.Services.AddSignalR();
 
             builder.Services.AddAuthentication(options =>
             {
@@ -50,6 +55,8 @@ namespace Gotorz
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddSignInManager()
                 .AddDefaultTokenProviders();
+            // I din Program.cs eller Startup.cs
+       
 
             builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
@@ -81,6 +88,16 @@ namespace Gotorz
                 options.Cookie.HttpOnly = true;
                 options.ExpireTimeSpan = TimeSpan.FromMinutes(60);
                 options.SlidingExpiration = true;
+            });
+
+            builder.Services.AddScoped<HubConnection>(sp =>
+            {
+                // Denne kode kører kun når komponenten anmoder om en HubConnection
+                var navigationManager = sp.GetRequiredService<NavigationManager>();
+                return new HubConnectionBuilder()
+                    .WithUrl(navigationManager.ToAbsoluteUri("/chathub"))
+                    .WithAutomaticReconnect()
+                    .Build();
             });
 
             var app = builder.Build();

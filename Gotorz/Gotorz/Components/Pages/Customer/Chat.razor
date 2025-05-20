@@ -1,0 +1,246 @@
+﻿@page "/customer/chat"
+@using Microsoft.AspNetCore.SignalR.Client
+@inject HubConnection hubConnection
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Gotorz.Data
+@using Microsoft.EntityFrameworkCore
+@using Gotorz.Models
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize(Roles = "Customer")]
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext DbContext
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+
+<h3>Blazor Chat</h3>
+
+<div class="chat-container">
+    <div class="message-list" id="messageList">
+        @foreach (var message in messages)
+        {
+            <div class="message-item">
+                <span class="user">@message.User</span>
+                <span class="time">@message.Timestamp.ToString("HH:mm:ss")</span>
+                <div class="text">@message.Text</div>
+            </div>
+        }
+    </div>
+
+    <div class="input-container">
+        <div class="user-input">
+            <label>Dit navn:</label>
+            <input @bind="userName" class="form-control" />
+        </div>
+
+        <div class="message-input">
+            <input @bind="messageInput" @bind:event="oninput"
+                   @onkeypress="HandleKeyPress" class="form-control"
+                   placeholder="Skriv en besked..." />
+            <button @onclick="SendMessage" class="btn btn-primary"
+                    disabled="@(!IsConnected || string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(messageInput))">
+                Send
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="connection-status @ConnectionStatusClass">
+    Connection Status: @ConnectionStatus
+</div>
+
+<style>
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: 800px;
+        height: 600px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 16px;
+    }
+
+    .message-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+        background-color: #f8f9fa;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .message-item {
+        padding: 10px;
+        border-radius: 8px;
+        background-color: white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        position: relative;
+    }
+
+    .user {
+        font-weight: bold;
+        margin-right: 8px;
+    }
+
+    .time {
+        color: #6c757d;
+        font-size: 0.8rem;
+    }
+
+    .text {
+        margin-top: 6px;
+    }
+
+    .input-container {
+        padding: 16px;
+        background-color: #f1f1f1;
+        border-top: 1px solid #ddd;
+    }
+
+    .user-input {
+        margin-bottom: 12px;
+    }
+
+    .message-input {
+        display: flex;
+        gap: 8px;
+    }
+
+    .message-input input {
+        flex: 1;
+    }
+
+    .connection-status {
+        padding: 8px;
+        border-radius: 4px;
+        font-weight: bold;
+    }
+
+    .connected {
+        background-color: #d4edda;
+        color: #155724;
+    }
+
+    .connecting {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+
+    .disconnected {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+</style>
+
+@code {
+    private string userName = "";
+    private string messageInput = "";
+    private List<ChatMessage> messages = new List<ChatMessage>();
+    private string ConnectionStatus => hubConnection.State switch
+    {
+        HubConnectionState.Connected => "Connected",
+        HubConnectionState.Connecting => "Connecting...",
+        HubConnectionState.Reconnecting => "Reconnecting...",
+        _ => "Disconnected"
+    };
+
+    private string ConnectionStatusClass => hubConnection.State switch
+    {
+        HubConnectionState.Connected => "connected",
+        HubConnectionState.Connecting or HubConnectionState.Reconnecting => "connecting",
+        _ => "disconnected"
+    };
+
+    private bool IsConnected => hubConnection.State == HubConnectionState.Connected;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Opsæt hvad der skal ske når vi modtager en besked
+        hubConnection.On<string, string, DateTime>("ReceiveMessage", (user, message, timestamp) =>
+        {
+            var chatMessage = new ChatMessage
+                {
+                    User = user,
+                    Text = message,
+                    Timestamp = timestamp
+                };
+
+            messages.Add(chatMessage);
+
+            // Opdater UI
+            InvokeAsync(StateHasChanged);
+
+            // Scroll til bunden
+            InvokeAsync(ScrollToBottom);
+        });
+
+        // Forbind til hub
+        try
+        {
+            await hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error connecting to hub: {ex.Message}");
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (IsConnected && !string.IsNullOrWhiteSpace(userName) && !string.IsNullOrWhiteSpace(messageInput))
+        {
+            try
+            {
+                await hubConnection.SendAsync("SendMessage", userName, messageInput);
+                messageInput = "";
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending message: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            // Brug JS Interop til at scrolle til bunden
+            await JSRuntime.InvokeVoidAsync("scrollChatToBottom", "messageList");
+        }
+        catch
+        {
+            // Ignorér fejl for nu
+        }
+    }
+
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+
+    private class ChatMessage
+    {
+        public string User { get; set; } = "";
+        public string Text { get; set; } = "";
+        public DateTime Timestamp { get; set; }
+    }
+}
