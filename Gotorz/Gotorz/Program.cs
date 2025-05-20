@@ -92,13 +92,14 @@ namespace Gotorz
 
             builder.Services.AddScoped<HubConnection>(sp =>
             {
-                // Denne kode kører kun når komponenten anmoder om en HubConnection
                 var navigationManager = sp.GetRequiredService<NavigationManager>();
                 return new HubConnectionBuilder()
-                    .WithUrl(navigationManager.ToAbsoluteUri("/chathub"))
+                    .WithUrl(navigationManager.ToAbsoluteUri("/chathub"))  // URL skal matche MapHub
                     .WithAutomaticReconnect()
                     .Build();
             });
+
+
 
             var app = builder.Build();
 
@@ -118,7 +119,7 @@ namespace Gotorz
             app.UseHttpsRedirection();
 
             app.UseStaticFiles();
-            app.UseAntiforgery();
+          
 
             app.MapRazorComponents<App>()
                 .AddInteractiveServerRenderMode()
@@ -134,7 +135,12 @@ namespace Gotorz
                 var serviceProvider = scope.ServiceProvider;
                 await SeedRolesAndAdminUser(serviceProvider);
             }
-
+            app.UseRouting();
+            app.UseAuthentication();
+            app.UseAuthorization();
+            app.UseAntiforgery();
+           
+            app.MapHub<ChatHub>("/chathub");
             app.Run();
         }
 
