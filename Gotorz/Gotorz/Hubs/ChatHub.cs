@@ -13,6 +13,24 @@ public class ChatHub : Hub
         _context = context;
         _userManager = userManager;
     }
+    private static HashSet<string> OnlineUsers = new();
+
+    public override async Task OnConnectedAsync()
+    {
+        var user = Context.User?.Identity?.Name ?? Context.ConnectionId;
+        OnlineUsers.Add(user);
+        await Clients.All.SendAsync("UpdateUserList", OnlineUsers.ToList());
+        await base.OnConnectedAsync();
+    }
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        var user = Context.User?.Identity?.Name ?? Context.ConnectionId;
+        OnlineUsers.Remove(user);
+        await Clients.All.SendAsync("UpdateUserList", OnlineUsers.ToList());
+        await base.OnDisconnectedAsync(exception);
+    }
+
 
     public async Task SendMessage(string user, string message)
     {

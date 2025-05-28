@@ -18,6 +18,15 @@
 
 
 <h3>Blazor Chat</h3>
+<div class="online-users">
+    <h5>Online brugere</h5>
+    <ul>
+        @foreach (var user in onlineUsers)
+        {
+            <li>@user</li>
+        }
+    </ul>
+</div>
 
 <div class="chat-container">
     <div class="message-list" id="messageList">
@@ -136,12 +145,27 @@
         background-color: #f8d7da;
         color: #721c24;
     }
+
+    .online-users {
+        position: absolute;
+        right: 0;
+        top: 0;
+        width: 200px;
+        height: 100%;
+        background-color: #f1f1f1;
+        padding: 10px;
+        border-left: 1px solid #ddd;
+        overflow-y: auto;
+    }
+
 </style>
 
 @code {
     private string userName = "";
     private string messageInput = "";
     private List<ChatMessage> messages = new List<ChatMessage>();
+    private List<string> onlineUsers = new();
+
     private string ConnectionStatus => hubConnection.State switch
     {
         HubConnectionState.Connected => "Connected",
@@ -179,6 +203,11 @@
             // Scroll til bunden
             InvokeAsync(ScrollToBottom);
         });
+        hubConnection.On<List<string>>("UpdateUserList", (users) =>
+       {
+       onlineUsers = users;
+       InvokeAsync(StateHasChanged);
+       });
 
         // Forbind til hub
         try
