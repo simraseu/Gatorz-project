@@ -18,15 +18,7 @@
 
 
 <h3>Blazor Chat</h3>
-<div class="online-users">
-    <h5>Online brugere</h5>
-    <ul>
-        @foreach (var user in onlineUsers)
-        {
-            <li>@user</li>
-        }
-    </ul>
-</div>
+
 
 <div class="chat-container">
     <div class="message-list" id="messageList">
@@ -56,7 +48,15 @@
         </div>
     </div>
 </div>
-
+<div class="online-users">
+    <h5>Online brugere</h5>
+    <ul>
+        @foreach (var user in onlineUsers)
+        {
+            <li>@user</li>
+        }
+    </ul>
+</div>
 <div class="connection-status @ConnectionStatusClass">
     Connection Status: @ConnectionStatus
 </div>
