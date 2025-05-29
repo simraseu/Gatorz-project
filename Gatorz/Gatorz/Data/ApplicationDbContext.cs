@@ -18,6 +18,8 @@ namespace Gatorz.Data
         public DbSet<TravelPackage> TravelPackages { get; set; }
         public DbSet<FlightInfo> FlightInfos { get; set; }
         public DbSet<HotelInfo> HotelInfos { get; set; }
+        public DbSet<ChatMessage> ChatMessages { get; set; } //Tilføjet for nyligt krav om chatfunktion
+        public DbSet<ActivityLog> ActivityLogs { get; set; } //Tilføjet for nyligt krav om adgangslogning
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -55,6 +57,23 @@ namespace Gatorz.Data
                 .HasOne(tp => tp.Hotel)
                 .WithOne(h => h.TravelPackage)
                 .HasForeignKey<HotelInfo>(h => h.TravelPackageId);
+
+            // ADD CHAT MESSAGE CONFIGURATION // Tilføjet for nyligt 
+            modelBuilder.Entity<ChatMessage>()
+                .HasIndex(c => c.Timestamp);
+
+            modelBuilder.Entity<ChatMessage>()
+                .HasIndex(c => c.Destination);
+
+            // ADD THIS FOR ACTIVITY LOGS: //Tilføjet for nyligt
+            modelBuilder.Entity<ActivityLog>()
+                .HasIndex(a => a.Timestamp);
+
+            modelBuilder.Entity<ActivityLog>()
+                .HasIndex(a => a.UserId);
+
+            modelBuilder.Entity<ActivityLog>()
+                .HasIndex(a => a.Action);
         }
     }
 }

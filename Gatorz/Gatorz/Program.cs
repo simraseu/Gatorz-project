@@ -4,6 +4,7 @@ using Gatorz.Components.Account;
 using Gatorz.Data;
 using Gatorz.Services;
 using Gatorz.Models;
+using Gatorz.Hubs;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -47,6 +48,7 @@ namespace Gatorz
             builder.Services.AddScoped<IdentityUserAccessor>();
             builder.Services.AddScoped<IdentityRedirectManager>();
             builder.Services.AddScoped<AuthenticationStateProvider, PersistingRevalidatingAuthenticationStateProvider>();
+            builder.Services.AddScoped<IActivityLogService, ActivityLogService>(); //Tilføjet for nyligt krav om aktivitetlog
 
             builder.Services.AddAuthentication(options =>
             {
@@ -85,6 +87,8 @@ namespace Gatorz
                 options.SlidingExpiration = true;
             });
             builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+            builder.Services.AddSignalR(); //Tilføjet for nyligt initierer chatfunktionen
+
 
             var app = builder.Build();
 
@@ -112,6 +116,7 @@ namespace Gatorz
 
             // Identity endpoints
             app.MapAdditionalIdentityEndpoints();
+            app.MapHub<ChatHub>("/chathub");
 
             // Seed roles and admin
             using (var scope = app.Services.CreateScope())
