@@ -16,6 +16,74 @@ namespace Gatorz.Services
         private readonly ITokenService _tokenService;
         private readonly ILogger<HotelService> _logger;
 
+        // Airport code to city code mapping
+        private readonly Dictionary<string, string> _airportToCityCode = new Dictionary<string, string>
+        {
+            // European airports
+            { "CPH", "CPH" }, // Copenhagen
+            { "BCN", "BCN" }, // Barcelona
+            { "MAD", "MAD" }, // Madrid
+            { "FCO", "ROM" }, // Rome Fiumicino -> Rome
+            { "CIA", "ROM" }, // Rome Ciampino -> Rome
+            { "CDG", "PAR" }, // Paris Charles de Gaulle -> Paris
+            { "ORY", "PAR" }, // Paris Orly -> Paris
+            { "LHR", "LON" }, // London Heathrow -> London
+            { "LGW", "LON" }, // London Gatwick -> London
+            { "STN", "LON" }, // London Stansted -> London
+            { "AMS", "AMS" }, // Amsterdam
+            { "FRA", "FRA" }, // Frankfurt
+            { "MUC", "MUC" }, // Munich
+            { "BER", "BER" }, // Berlin
+            { "VIE", "VIE" }, // Vienna
+            { "ZRH", "ZRH" }, // Zurich
+            { "BRU", "BRU" }, // Brussels
+            { "LIS", "LIS" }, // Lisbon
+            { "ATH", "ATH" }, // Athens
+            { "DUB", "DUB" }, // Dublin
+            { "PRG", "PRG" }, // Prague
+            { "WAW", "WAW" }, // Warsaw
+            { "BUD", "BUD" }, // Budapest
+            { "OSL", "OSL" }, // Oslo
+            { "ARN", "STO" }, // Stockholm Arlanda -> Stockholm
+            { "HEL", "HEL" }, // Helsinki
+            // Middle East
+            { "DXB", "DXB" }, // Dubai
+            { "DOH", "DOH" }, // Doha
+            { "IST", "IST" }, // Istanbul
+            // North America
+            { "JFK", "NYC" }, // New York JFK -> New York
+            { "LGA", "NYC" }, // New York LaGuardia -> New York
+            { "EWR", "NYC" }, // Newark -> New York
+            { "LAX", "LAX" }, // Los Angeles
+            { "ORD", "CHI" }, // Chicago O'Hare -> Chicago
+            { "MDW", "CHI" }, // Chicago Midway -> Chicago
+            { "SFO", "SFO" }, // San Francisco
+            { "MIA", "MIA" }, // Miami
+            { "BOS", "BOS" }, // Boston
+            { "SEA", "SEA" }, // Seattle
+            { "LAS", "LAS" }, // Las Vegas
+            { "YYZ", "YTO" }, // Toronto Pearson -> Toronto
+            // Asia
+            { "HND", "TYO" }, // Tokyo Haneda -> Tokyo
+            { "NRT", "TYO" }, // Tokyo Narita -> Tokyo
+            { "PEK", "BJS" }, // Beijing Capital -> Beijing
+            { "PVG", "SHA" }, // Shanghai Pudong -> Shanghai
+            { "SHA", "SHA" }, // Shanghai Hongqiao -> Shanghai
+            { "HKG", "HKG" }, // Hong Kong
+            { "ICN", "SEL" }, // Seoul Incheon -> Seoul
+            { "SIN", "SIN" }, // Singapore
+            { "BKK", "BKK" }, // Bangkok
+            { "DEL", "DEL" }, // Delhi
+            { "BOM", "BOM" }, // Mumbai
+            // Australia
+            { "SYD", "SYD" }, // Sydney
+            { "MEL", "MEL" }, // Melbourne
+            // South America
+            { "GRU", "SAO" }, // São Paulo Guarulhos -> São Paulo
+            { "GIG", "RIO" }, // Rio de Janeiro Galeão -> Rio
+            { "EZE", "BUE" }, // Buenos Aires Ezeiza -> Buenos Aires
+        };
+
         public HotelService(IHttpClientFactory factory, ITokenService tokenService, ILogger<HotelService> logger)
         {
             _factory = factory;
@@ -23,8 +91,31 @@ namespace Gatorz.Services
             _logger = logger;
         }
 
+        private string ConvertAirportToCityCode(string code)
+        {
+            if (string.IsNullOrEmpty(code))
+                return code;
+
+            // Convert to uppercase for consistency
+            code = code.ToUpper();
+
+            // If we have a mapping, use it
+            if (_airportToCityCode.TryGetValue(code, out var cityCode))
+            {
+                _logger.LogInformation($"Converted airport code {code} to city code {cityCode}");
+                return cityCode;
+            }
+
+            // Otherwise, assume it's already a city code
+            _logger.LogInformation($"No conversion needed for code {code}, using as-is");
+            return code;
+        }
+
         public async Task<List<HotelInfo>> SearchHotelsAsync(string cityCode, DateTime checkIn, DateTime checkOut)
         {
+            // Convert airport code to city code if needed
+            cityCode = ConvertAirportToCityCode(cityCode);
+
             // If cityCode is empty, return mock data
             if (string.IsNullOrEmpty(cityCode))
             {
@@ -74,25 +165,31 @@ namespace Gatorz.Services
                     // Parse the hotel offers into HotelInfo objects
                     var results = new List<HotelInfo>();
 
-                    for (int i = 0; i < offers.Count; i++)
+                    for (int i = 0; i < offers.Count && i < 10; i++) // Limit to 10 hotels
                     {
                         try
                         {
                             var hotelInfo = new HotelInfo
                             {
-                                Id = int.Parse(GetNestedString(offers[i], "hotel", "hotelId") ?? i.ToString()),
-                                HotelName = GetNestedString(offers[i], "hotel", "name"),
+                                Id = i + 1, // Use sequential IDs starting from 1
+                                HotelName = GetNestedString(offers[i], "hotel", "name") ?? $"Hotel {i + 1}",
                                 Address = GetAddressLine(offers[i]),
-                                City = GetNestedString(offers[i], "hotel", "address", "cityName"),
-                                Country = GetNestedString(offers[i], "hotel", "address", "countryCode"),
-                                StarRating = ParseInt(GetNestedString(offers[i], "hotel", "rating")),
+                                City = GetNestedString(offers[i], "hotel", "address", "cityName") ?? cityCode,
+                                Country = GetNestedString(offers[i], "hotel", "address", "countryCode") ?? "Unknown",
+                                StarRating = ParseInt(GetNestedString(offers[i], "hotel", "rating")) ?? 3,
                                 CheckInDate = checkIn,
                                 CheckOutDate = checkOut,
                                 RoomType = GetNestedString(offers[i], "offers", 0, "room", "typeEstimated", "category")
                                     ?? GetNestedString(offers[i], "offers", 0, "room", "type")
                                     ?? "Standard Room",
                                 PricePerNight = ParseDecimal(GetNestedString(offers[i], "offers", 0, "price", "base"))
+                                    ?? ParseDecimal(GetNestedString(offers[i], "offers", 0, "price", "total"))
+                                    ?? 100m // Default price if parsing fails
                             };
+
+                            // Ensure we have valid data
+                            if (string.IsNullOrEmpty(hotelInfo.HotelName))
+                                hotelInfo.HotelName = $"Hotel in {cityCode}";
 
                             results.Add(hotelInfo);
                             _logger.LogInformation($"Parsed hotel {hotelInfo.HotelName} successfully");
@@ -138,12 +235,12 @@ namespace Gatorz.Services
                 {
                     return lines[0].ToString();
                 }
-                return string.Empty;
+                return "Main Street 1";
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error getting address line: {ex.Message}");
-                return string.Empty;
+                return "Main Street 1";
             }
         }
 
@@ -167,7 +264,7 @@ namespace Gatorz.Services
 
                     if (current == null)
                     {
-                        return string.Empty;
+                        return null;
                     }
                 }
 
@@ -176,26 +273,32 @@ namespace Gatorz.Services
             catch (Exception ex)
             {
                 _logger.LogError($"Error getting nested string: {ex.Message}");
-                return string.Empty;
+                return null;
             }
         }
 
-        private int ParseInt(string intString)
+        private int? ParseInt(string intString)
         {
+            if (string.IsNullOrEmpty(intString))
+                return null;
+
             if (int.TryParse(intString, out var result))
             {
                 return result;
             }
-            return 0;
+            return null;
         }
 
-        private decimal ParseDecimal(string decimalString)
+        private decimal? ParseDecimal(string decimalString)
         {
+            if (string.IsNullOrEmpty(decimalString))
+                return null;
+
             if (decimal.TryParse(decimalString, out var result))
             {
                 return result;
             }
-            return 0;
+            return null;
         }
 
         public Task<HotelInfo> GetHotelDetailAsync(string hotelId)
@@ -216,11 +319,20 @@ namespace Gatorz.Services
             var cityMapping = new Dictionary<string, (string City, string Country)>
             {
                 { "BCN", ("Barcelona", "ES") },
+                { "ROM", ("Rome", "IT") },
                 { "FCO", ("Rome", "IT") },
+                { "PAR", ("Paris", "FR") },
                 { "CDG", ("Paris", "FR") },
+                { "LON", ("London", "UK") },
                 { "LHR", ("London", "UK") },
                 { "CPH", ("Copenhagen", "DK") },
-                { "DXB", ("Dubai", "AE") }
+                { "DXB", ("Dubai", "AE") },
+                { "NYC", ("New York", "US") },
+                { "JFK", ("New York", "US") },
+                { "TYO", ("Tokyo", "JP") },
+                { "BKK", ("Bangkok", "TH") },
+                { "SIN", ("Singapore", "SG") },
+                { "SYD", ("Sydney", "AU") }
             };
 
             // Get city name and country code or use defaults if not found
@@ -248,7 +360,7 @@ namespace Gatorz.Services
 
                 hotels.Add(new HotelInfo
                 {
-                    Id = i,
+                    Id = i + 1,
                     HotelName = hotelName,
                     Address = $"{random.Next(1, 200)} Main Street",
                     City = cityName,
@@ -257,7 +369,7 @@ namespace Gatorz.Services
                     CheckInDate = checkIn,
                     CheckOutDate = checkOut,
                     RoomType = roomType,
-                    PricePerNight = pricePerNight
+                    PricePerNight = Math.Round(pricePerNight, 2)
                 });
             }
 

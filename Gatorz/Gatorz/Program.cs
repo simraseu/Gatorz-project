@@ -1,4 +1,3 @@
-using Gatorz.Client.Pages;
 using Gatorz.Components;
 using Gatorz.Components.Account;
 using Gatorz.Data;
@@ -8,156 +7,155 @@ using Gatorz.Hubs;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using System.Net.Http.Headers;
+using Microsoft.Extensions.Options;
+using System.Security.Claims;
 
-namespace Gatorz
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents()
+    .AddInteractiveWebAssemblyComponents();
+
+builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddScoped<IdentityUserAccessor>();
+builder.Services.AddScoped<IdentityRedirectManager>();
+builder.Services.AddScoped<AuthenticationStateProvider, PersistingRevalidatingAuthenticationStateProvider>();
+
+builder.Services.AddAuthentication(options =>
 {
-    public class Program
+    options.DefaultScheme = IdentityConstants.ApplicationScheme;
+    options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
+})
+    .AddIdentityCookies();
+
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ??
+    throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(connectionString));
+
+builder.Services.AddDatabaseDeveloperPageExceptionFilter();
+
+builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = false)
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddSignInManager()
+    .AddDefaultTokenProviders();
+
+builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+
+// Configure Amadeus settings
+builder.Services.Configure<AmadeusSettings>(builder.Configuration.GetSection("Amadeus"));
+
+// Register HTTP client factories
+builder.Services.AddHttpClient("AmadeusAuth", (serviceProvider, client) =>
+{
+    var settings = serviceProvider.GetRequiredService<IOptions<AmadeusSettings>>().Value;
+    client.BaseAddress = new Uri(settings.AuthUrl);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
+builder.Services.AddHttpClient("AmadeusAPI", (serviceProvider, client) =>
+{
+    var settings = serviceProvider.GetRequiredService<IOptions<AmadeusSettings>>().Value;
+    client.BaseAddress = new Uri(settings.BaseUrl);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
+// Register services
+builder.Services.AddSingleton<ITokenService, AmadeusTokenService>();
+builder.Services.AddScoped<IFlightService, FlightService>();
+builder.Services.AddScoped<IHotelService, HotelService>();
+builder.Services.AddScoped<ITravelPackageService, TravelPackageService>();
+builder.Services.AddScoped<IActivityLogService, ActivityLogService>();
+
+// Add SignalR
+builder.Services.AddSignalR();
+
+// Add HttpContextAccessor
+builder.Services.AddHttpContextAccessor();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseWebAssemblyDebugging();
+    app.UseMigrationsEndPoint();
+}
+else
+{
+    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+app.UseAntiforgery();
+
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode()
+    .AddInteractiveWebAssemblyRenderMode()
+    .AddAdditionalAssemblies(typeof(Gatorz.Client._Imports).Assembly);
+
+// Add additional endpoints required by the Identity Razor components.
+app.MapAdditionalIdentityEndpoints();
+
+// Map SignalR hub
+app.MapHub<ChatHub>("/chathub");
+
+// Initialize database and roles
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+    // Apply migrations
+    dbContext.Database.Migrate();
+
+    // Create roles if they don't exist
+    string[] roles = { UserRoles.Admin, UserRoles.Customer, UserRoles.SalesAgent };
+    foreach (var role in roles)
     {
-        public static async Task Main(string[] args)
+        if (!await roleManager.RoleExistsAsync(role))
         {
-            var builder = WebApplication.CreateBuilder(args);
-
-            // Database Services
-            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-                ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
-            builder.Services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseSqlServer(connectionString));
-            builder.Services.AddDatabaseDeveloperPageExceptionFilter();
-
-            // Amadeus WEB API Services
-            builder.Services.Configure<AmadeusSettings>(builder.Configuration.GetSection("Amadeus"));
-            builder.Services.AddHttpClient("AmadeusAuth", client => {
-                client.BaseAddress = new Uri(builder.Configuration["Amadeus:AuthUrl"]);
-                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            });
-            builder.Services.AddHttpClient("AmadeusAPI", client => {
-                client.BaseAddress = new Uri(builder.Configuration["Amadeus:BaseUrl"]);
-                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            });
-            builder.Services.AddSingleton<ITokenService, AmadeusTokenService>();
-            builder.Services.AddScoped<IFlightService, FlightService>();
-            builder.Services.AddScoped<IHotelService, HotelService>();
-            builder.Services.AddScoped<ITravelPackageService, TravelPackageService>();
-
-            // Blazor & Authentication
-            builder.Services.AddRazorComponents()
-                .AddInteractiveServerComponents()
-                .AddInteractiveWebAssemblyComponents();
-            builder.Services.AddCascadingAuthenticationState();
-            builder.Services.AddScoped<IdentityUserAccessor>();
-            builder.Services.AddScoped<IdentityRedirectManager>();
-            builder.Services.AddScoped<AuthenticationStateProvider, PersistingRevalidatingAuthenticationStateProvider>();
-            builder.Services.AddScoped<IActivityLogService, ActivityLogService>(); //Tilføjet for nyligt krav om aktivitetlog
-
-            builder.Services.AddAuthentication(options =>
-            {
-                options.DefaultScheme = IdentityConstants.ApplicationScheme;
-                options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
-            }).AddIdentityCookies();
-
-            builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = false)
-                .AddRoles<IdentityRole>()
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddSignInManager()
-                .AddDefaultTokenProviders();
-
-            // Identity options
-            builder.Services.Configure<IdentityOptions>(options =>
-            {
-                options.Password.RequireDigit = false;
-                options.Password.RequireLowercase = false;
-                options.Password.RequireNonAlphanumeric = false;
-                options.Password.RequireUppercase = false;
-                options.Password.RequiredLength = 8;
-                options.Password.RequiredUniqueChars = 1;
-
-                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
-                options.Lockout.MaxFailedAccessAttempts = 5;
-                options.Lockout.AllowedForNewUsers = true;
-
-                options.User.AllowedUserNameCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._@+";
-                options.User.RequireUniqueEmail = true;
-            });
-
-            builder.Services.ConfigureApplicationCookie(options =>
-            {
-                options.Cookie.HttpOnly = true;
-                options.ExpireTimeSpan = TimeSpan.FromMinutes(60);
-                options.SlidingExpiration = true;
-            });
-            builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
-            builder.Services.AddSignalR(); //Tilføjet for nyligt initierer chatfunktionen
-
-
-            var app = builder.Build();
-
-            // Middleware
-            if (app.Environment.IsDevelopment())
-            {
-                app.UseWebAssemblyDebugging();
-                app.UseMigrationsEndPoint();
-            }
-            else
-            {
-                app.UseExceptionHandler("/Error");
-                app.UseHsts();
-            }
-
-            app.UseHttpsRedirection();
-            app.UseStaticFiles();
-            app.UseAntiforgery();
-
-            // Blazor endpoints
-            app.MapRazorComponents<App>()
-                .AddInteractiveServerRenderMode()
-                .AddInteractiveWebAssemblyRenderMode()
-                .AddAdditionalAssemblies(typeof(Client._Imports).Assembly);
-
-            // Identity endpoints
-            app.MapAdditionalIdentityEndpoints();
-            app.MapHub<ChatHub>("/chathub");
-
-            // Seed roles and admin
-            using (var scope = app.Services.CreateScope())
-            {
-                var services = scope.ServiceProvider;
-                await SeedRolesAndAdminUser(services);
-            }
-
-            app.Run();
+            await roleManager.CreateAsync(new IdentityRole(role));
         }
+    }
 
-        private static async Task SeedRolesAndAdminUser(IServiceProvider serviceProvider)
+    // Create admin user if it doesn't exist
+    var adminEmail = "admin@gatorz.com";
+    var adminUser = await userManager.FindByEmailAsync(adminEmail);
+    if (adminUser == null)
+    {
+        adminUser = new ApplicationUser
         {
-            var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-            var userManager = serviceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            UserName = adminEmail,
+            Email = adminEmail,
+            FirstName = "Admin",
+            LastName = "User",
+            EmailConfirmed = true
+        };
+        await userManager.CreateAsync(adminUser, "Admin123!");
+        await userManager.AddToRoleAsync(adminUser, UserRoles.Admin);
+    }
 
-            // Seed roles
-            string[] roleNames = { UserRoles.Admin, UserRoles.Customer, UserRoles.SalesAgent };
-            foreach (var roleName in roleNames)
-            {
-                if (!await roleManager.RoleExistsAsync(roleName))
-                    await roleManager.CreateAsync(new IdentityRole(roleName));
-            }
-
-            // Seed admin user
-            var adminEmail = "admin@gatorz.com";
-            var adminUser = await userManager.FindByEmailAsync(adminEmail);
-            if (adminUser == null)
-            {
-                var admin = new ApplicationUser
-                {
-                    UserName = adminEmail,
-                    Email = adminEmail,
-                    EmailConfirmed = true,
-                    FirstName = "System",
-                    LastName = "Administrator"
-                };
-                var result = await userManager.CreateAsync(admin, "Admin123!");
-                if (result.Succeeded)
-                    await userManager.AddToRoleAsync(admin, UserRoles.Admin);
-            }
+    // Add FirstName and LastName claims for existing users
+    var allUsers = userManager.Users.ToList();
+    foreach (var user in allUsers)
+    {
+        var claims = await userManager.GetClaimsAsync(user);
+        if (!claims.Any(c => c.Type == "FirstName"))
+        {
+            await userManager.AddClaimAsync(user, new Claim("FirstName", user.FirstName));
+        }
+        if (!claims.Any(c => c.Type == "LastName"))
+        {
+            await userManager.AddClaimAsync(user, new Claim("LastName", user.LastName));
         }
     }
 }
+
+app.Run();
