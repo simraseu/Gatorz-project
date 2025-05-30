@@ -4,11 +4,15 @@
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Identity
 @using Gatorz.Data
+@using Gatorz.Services
 
 @inject SignInManager<ApplicationUser> SignInManager
 @inject ILogger<Login> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
+@inject UserManager<ApplicationUser> UserManager
+@inject IHttpContextAccessor HttpContextAccessor
+
 
 <PageTitle>Log in</PageTitle>
 
@@ -90,9 +94,28 @@
         // This doesn't count login failures towards account lockout
         // To enable password failures to trigger account lockout, set lockoutOnFailure: true
         var result = await SignInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: false);
+
         if (result.Succeeded)
         {
             Logger.LogInformation("User logged in.");
+
+            // Log the successful login
+            try
+            {
+                var user = await UserManager.FindByEmailAsync(Input.Email);
+                if (user != null)
+                {
+                    var activityLogService = HttpContextAccessor.HttpContext.RequestServices.GetRequiredService<IActivityLogService>();
+                    var httpContext = HttpContextAccessor.HttpContext;
+                    await activityLogService.LogActivityAsync(user.Id, "User Login", "Successful login", httpContext);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Failed to log login activity: {ex.Message}");
+                // Don't break login flow if logging fails
+            }
+
             RedirectManager.RedirectTo(ReturnUrl);
         }
         else if (result.RequiresTwoFactor)
@@ -109,6 +132,22 @@
         else
         {
             errorMessage = "Error: Invalid login attempt.";
+
+            // Log failed login attempt
+            try
+            {
+                var user = await UserManager.FindByEmailAsync(Input.Email);
+                if (user != null)
+                {
+                    var activityLogService = HttpContextAccessor.HttpContext.RequestServices.GetRequiredService<IActivityLogService>();
+                    var httpContext = HttpContextAccessor.HttpContext;
+                    await activityLogService.LogActivityAsync(user.Id, "Login Failed", $"Failed login attempt for {Input.Email}", httpContext);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Failed to log failed login activity: {ex.Message}");
+            }
         }
     }
 
