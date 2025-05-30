@@ -1,4 +1,4 @@
-using Gotorz.Client.Pages;
+﻿using Gotorz.Client.Pages;
 using Gotorz.Components;
 using Gotorz.Components.Account;
 using Gotorz.Data;
@@ -25,16 +25,19 @@ namespace Gotorz
             builder.Services.AddRazorComponents()
                 .AddInteractiveServerComponents()
                 .AddInteractiveWebAssemblyComponents();
-            builder.Services.AddScoped<IFlightService, FlightService>();
-            builder.Services.AddScoped<IHotelService, HotelService>();
+            builder.Services.AddHttpClient(); // 👈 Gør at DI kan injicere HttpClient
+
+           
 
             builder.Services.AddCascadingAuthenticationState();
             builder.Services.AddScoped<IdentityUserAccessor>();
             builder.Services.AddScoped<IdentityRedirectManager>();
             builder.Services.AddScoped<AuthenticationStateProvider, PersistingRevalidatingAuthenticationStateProvider>();
-            builder.Services.AddScoped<IFlightService, FlightService>();
-            builder.Services.AddScoped<IHotelService, HotelService>();
-            builder.Services.AddScoped<ITravelPackageService, TravelPackageService>();
+            builder.Services.AddScoped<FlightService, FlightService>();
+            builder.Services.AddScoped<HotelService, HotelService>();
+            builder.Services.AddScoped<TravelPackageService, TravelPackageService>();
+            builder.Services.AddScoped<FlightApiService>();
+            builder.Services.AddScoped<HotelApiService>();
             builder.Services.AddScoped<ChatHub>();
             builder.Services.AddSignalR();
 
@@ -102,7 +105,7 @@ namespace Gotorz
 
 
             var app = builder.Build();
-            // K�r migrations automatisk
+            // Kør migrations automatisk
             using (var scope = app.Services.CreateScope())
             {
                 var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();

@@ -1,0 +1,385 @@
+﻿@page "/packages/create"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Gotorz.ViewModel
+@using Gotorz.Services
+@inject NavigationManager Navigation
+@inject TravelPackageService TravelpackageService
+@inject HotelService HotelService
+@inject HotelApiService HotelApiService
+
+<h3>Opret ny rejsepakke</h3>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-warning" role="alert">
+        @errorMessage
+    </div>
+}
+
+<EditForm Model="@formModel" OnValidSubmit="HandleCreatePackage">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+    <div class="container mt-3">
+        <div class="row">
+            <!-- Venstre kolonne -->
+            <div class="col-md-6">
+
+                <div class="mb-3">
+                    <label>Destination</label>
+                    <InputText @bind-Value="formModel.Destination" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Afrejsedato</label>
+                    <InputDate @bind-Value="formModel.DepartureDate" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Returdato</label>
+                    <InputDate @bind-Value="formModel.ReturnDate" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Afgangslufthavn</label>
+                    <InputText @bind-Value="formModel.OriginAirport" class="form-control" placeholder="f.eks. CPH" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Valuta</label>
+                    <InputText @bind-Value="formModel.Currency" class="form-control" placeholder="f.eks. USD" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Antal voksne</label>
+                    <InputNumber @bind-Value="formModel.Adults" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Antal børn</label>
+                    <InputNumber @bind-Value="formModel.Kids" class="form-control" />
+                </div>
+
+                <button class="btn btn-primary mb-3" type="button" @onclick="LoadFlights">
+                    ✈️ Hent flymuligheder
+                </button>
+
+                <div class="mb-3">
+                    <label>Antal værelser</label>
+                    <InputNumber @bind-Value="formModel.Rooms" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Vælg hotel</label>
+                    <InputSelect @bind-Value="formModel.SelectedHotelId" class="form-control" @onchange="OnHotelSelected">
+                        <option value="">-- Vælg hotel --</option>
+                        @foreach (var hotel in formModel.AvailableHotels)
+                        {
+                            <option value="@hotel.Id">@hotel.Name (@hotel.City)</option>
+                        }
+                    </InputSelect>
+                    @if (formModel.HotelApiPrice != null)
+                    {
+                        <p><strong>Fra-pris (API):</strong> @formModel.HotelApiPrice.Value.ToString("C")</p>
+                    }
+                </div>
+
+                @if (formModel.AvailableRooms.Any())
+                {
+                    <div class="mb-3">
+                        <label>Vælg værelse:</label>
+                        <InputSelect @bind-Value="formModel.SelectedRoomType" class="form-control" @onchange="OnRoomSelected">
+                            <option value="">-- Vælg værelse --</option>
+                            @foreach (var room in formModel.AvailableRooms)
+                            {
+                                <option value="@room">@room</option>
+                            }
+                        </InputSelect>
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label>Pris på valgt værelse:</label>
+                    @if (formModel.HotelPrice.HasValue)
+                    {
+                        <div class="form-control">
+                            @formModel.HotelPrice.Value.ToString("C")
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="form-control text-muted">Ingen pris tilgængelig</div>
+                    }
+                </div>
+
+                <div class="mb-3">
+                    <label>Beskrivelse</label>
+                    <InputTextArea @bind-Value="formModel.Description" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Billede (URL)</label>
+                    <InputText @bind-Value="formModel.ImageUrl" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Pris (manuelt, valgfrit)</label>
+                    <InputNumber @bind-Value="formModel.ManualPriceOverride" class="form-control" />
+                </div>
+
+                <div class="mb-3">
+                    <label>Påslag i %</label>
+                    <InputNumber @bind-Value="formModel.MarkupPercent" class="form-control" />
+                </div>
+
+                <div class="d-flex gap-2 mb-3">
+                    <button class="btn btn-secondary" type="button" @onclick="LoadFlights">Hent fly info</button>
+                    <button class="btn btn-warning" type="button" @onclick="LoadHotelPriceAndRooms">
+                        🔍 Hent hotelpris/værelser
+                    </button>
+                    <button class="btn btn-primary" type="button" @onclick="HandleCreatePackage">Opret pakke</button>
+                </div>
+
+            </div>
+
+            <!-- Højre kolonne -->
+            <div class="col-md-6">
+                @if (formModel.AvailableFlights.Count > 0)
+                {
+                    <h5>Vælg fly</h5>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        @for (int i = 0; i < formModel.AvailableFlights.Count; i++)
+                        {
+                            var f = formModel.AvailableFlights[i];
+                            <div class="card mb-2 @(formModel.SelectedFlightIndex == i ? "border-success bg-light" : "border-secondary")"
+                                 @onclick="@(() => SelectFlight(i))"
+                                 style="cursor: pointer;">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <p class="mb-1">
+                                                <strong>@f.Airline</strong>
+                                                @if (formModel.SelectedFlightIndex == i)
+                                                {
+                                                    <span class="badge bg-success ms-2">VALGT ✓</span>
+                                                }
+                                            </p>
+
+                                            <ul class="list-unstyled mb-2 small">
+                                                @foreach (var flightSegment in f.Flights)
+                                                {
+                                                    <li>@flightSegment</li>
+                                                }
+                                            </ul>
+
+                                            <p class="mb-0 small"><strong>Varighed:</strong> @f.Duration</p>
+                                        </div>
+                                        <div class="text-end">
+                                            <h5 class="text-primary mb-0">@f.Price</h5>
+                                            <small class="text-muted">pr. person</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Prisinfo når fly er valgt -->
+                    @if (formModel.SelectedFlightIndex >= 0 && formModel.SelectedFlightIndex < formModel.AvailableFlights.Count)
+                    {
+                        var selectedFlight = formModel.AvailableFlights[formModel.SelectedFlightIndex];
+                        <div class="alert alert-info mt-3">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <strong>Fly:</strong><br>
+                                    <span class="h6 text-primary">@selectedFlight.Price</span>
+                                </div>
+                                <div class="col-4">
+                                    <strong>Hotel:</strong><br>
+                                    <span class="h6 text-success">
+                                        @(formModel.HotelApiPrice?.ToString("C") ?? "0 kr")
+                                    </span>
+                                </div>
+                                <div class="col-4">
+                                    <strong>Total:</strong><br>
+                                    <span class="h5 text-danger">@formModel.FinalPrice.ToString("C")</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning mt-3">
+                            <strong>Vælg et fly for at se prisen</strong>
+                        </div>
+                    }
+                }
+
+                @if (formModel.SelectedHotel != null)
+                {
+                    <div class="card mb-3">
+                        <div class="card-header bg-success text-white">Hotelinformation</div>
+                        <div class="card-body">
+                            <p><strong>@formModel.SelectedHotel.Name</strong></p>
+                            <p>@formModel.SelectedHotel.Address</p>
+                            <p>
+                                Fra-pris:
+                                @(formModel.HotelPrice.HasValue
+                                    ? formModel.HotelPrice.Value.ToString("C")
+                                    : "Ikke tilgængelig")
+                            </p>
+                        </div>
+                    </div>
+                }
+
+                @if (formModel.StoredFinalPrice > 0)
+                {
+                    <div class="alert alert-info mt-3">
+                        <strong>Slutpris (beregnet):</strong> @formModel.StoredFinalPrice.Value.ToString("C")
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</EditForm>
+
+@code {
+    private TravelPackageFormViewModel formModel = new();
+    private string? errorMessage;
+    private string bestVendorName = string.Empty;
+    private decimal bestVendorPrice = 0;
+
+    public CreatePackage()
+    {
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        formModel.AvailableHotels = await HotelService.GetAllHotelsAsync();
+    }
+
+    private async Task LoadHotelPriceAndRooms()
+    {
+        await OnHotelSelected(new ChangeEventArgs { Value = formModel.SelectedHotelId });
+    }
+
+    private void UpdateHotelPrice()
+    {
+        RecalculateFinalPrice();
+    }
+
+    private async Task OnHotelSelected(ChangeEventArgs e)
+    {
+        Console.WriteLine($"🏨 OnHotelSelected kaldt med værdi: {e.Value}");
+
+        var selectedId = int.Parse(e.Value?.ToString() ?? "0");
+        formModel.SelectedHotel = await HotelService.GetHotelDetailsAsync(selectedId);
+
+        if (formModel.SelectedHotel == null)
+            return;
+
+        var hotelApiResult = await HotelApiService.SearchHotelPricesAsync(
+            formModel.SelectedHotel.Country,
+            formModel.SelectedHotel.ApiHotelId,
+            formModel.DepartureDate,
+            formModel.ReturnDate,
+            formModel.Currency,
+            formModel.Adults,
+            formModel.Kids,
+            formModel.Rooms
+        );
+
+        if (hotelApiResult?.RatePerNight?.ExtractedLowest > 0)
+        {
+            formModel.HotelApiPrice = hotelApiResult.RatePerNight.ExtractedLowest;
+        }
+
+        RecalculateFinalPrice();
+        StateHasChanged();
+    }
+
+    private void OnRoomSelected(ChangeEventArgs e)
+    {
+        formModel.SelectedRoomType = e.Value?.ToString();
+        RecalculateFinalPrice();
+    }
+
+    private decimal ParsePrice(string? priceString)
+    {
+        if (decimal.TryParse(priceString?.Replace("USD", "").Replace(",", "").Trim(), out var price))
+            return price;
+        return 0;
+    }
+
+    private async Task LoadFlights()
+    {
+        errorMessage = null;
+
+        if (formModel.DepartureDate == default || formModel.ReturnDate == default)
+        {
+            errorMessage = "❗ Du skal vælge både afrejsedato og returdato, før du kan hente fly.";
+            return;
+        }
+
+        var availableFlights = await TravelpackageService.CreateFlightOptionsAsync(
+            formModel.OriginAirport,
+            formModel.Destination,
+            formModel.DepartureDate,
+            formModel.ReturnDate,
+            formModel.Currency);
+
+        if (availableFlights != null && availableFlights.Any())
+        {
+            formModel.AvailableFlights = availableFlights;
+            formModel.SelectedFlightIndex = 0;
+            RecalculateFinalPrice();
+        }
+    }
+
+    private void RecalculateFinalPrice()
+    {
+        decimal flightPrice = 0;
+        decimal hotelPrice = 0;
+
+        // Find flyprisen
+        if (formModel.AvailableFlights != null &&
+            formModel.AvailableFlights.Count > 0 &&
+            formModel.SelectedFlightIndex >= 0 &&
+            formModel.SelectedFlightIndex < formModel.AvailableFlights.Count)
+        {
+            var selectedFlight = formModel.AvailableFlights[formModel.SelectedFlightIndex];
+            if (decimal.TryParse(selectedFlight?.Price?.Replace("USD", "").Replace(",", "").Trim(), out var parsedFlightPrice))
+            {
+                flightPrice = parsedFlightPrice;
+            }
+        }
+
+        formModel.FlightPrice = flightPrice.ToString("F2");
+
+        // Hent hotelpris
+        if (formModel.HotelApiPrice != null)
+        {
+            hotelPrice = formModel.HotelApiPrice.Value;
+        }
+
+        // Beregn total pris
+        var total = flightPrice + hotelPrice;
+        formModel.StoredFinalPrice = total;
+
+        StateHasChanged();
+    }
+
+    private async Task HandleCreatePackage()
+    {
+        formModel.FlightPackage = formModel.AvailableFlights.ElementAtOrDefault(formModel.SelectedFlightIndex);
+        await TravelpackageService.SaveTravelPackageAsync(formModel);
+        Navigation.NavigateTo("/packages");
+    }
+
+    private void SelectFlight(int index)
+    {
+        formModel.SelectedFlightIndex = index;
+        RecalculateFinalPrice();
+    }
+}

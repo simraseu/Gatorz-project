@@ -1,0 +1,132 @@
+﻿@page "/hotels"
+
+
+@using Microsoft.AspNetCore.Components.Forms
+@using Gotorz.Services
+@inject HotelService HotelService
+@inject NavigationManager Navigation
+@inject TravelPackageService TravelpackageService
+@using Gotorz.Models
+@using Gotorz.ViewModel
+@inject IJSRuntime JSRuntime
+@inject HotelService HotelService
+@inject NavigationManager Navigation
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3>Hoteller</h3>
+    <button class="btn btn-success" @onclick="CreateNewHotel">
+        ➕ Tilføj hotel
+    </button>
+</div>
+
+
+
+<div class="mb-3">
+    <label>Vælg land:</label>
+    <InputSelect @bind-Value="selectedCountry" class="form-control" @onchange="OnCountryChanged">
+        <option value="">-- Vælg land --</option>
+        @foreach (var country in countries)
+        {
+            <option value="@country">@country</option>
+        }
+    </InputSelect>
+</div>
+
+@if (!string.IsNullOrEmpty(selectedCountry))
+{
+    <div class="mb-3">
+        <label>Vælg by:</label>
+        <InputSelect @bind-Value="selectedCity" class="form-control" @onchange="LoadHotels">
+            <option value="">-- Vælg by --</option>
+            @foreach (var city in cities)
+            {
+                <option value="@city">@city</option>
+            }
+        </InputSelect>
+    </div>
+}
+
+@if (hotels != null && hotels.Count > 0)
+{
+    <table class="table table-hover table-bordered">
+        <thead class="table-light">
+            <tr>
+                <th>Navn</th>
+                <th>Adresse</th>
+                <th>Handlinger</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var hotel in hotels)
+            {
+                <tr>
+                    <td>@hotel.Name</td>
+                    <td>@hotel.Address</td>
+                    <td>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-primary" @onclick="@(() => EditHotel(hotel.Id))">
+                                ✏️ Rediger
+                            </button>
+                            <button class="btn btn-sm btn-danger" @onclick="@(() => ConfirmDeleteHotel(hotel.Id))">
+                                🗑️ Slet
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+    </tbody>
+</table>
+
+@code {
+    private List<string> countries = new();
+    private List<string> cities = new();
+    private List<HotelViewModel> hotels = new();
+
+    private string? selectedCountry;
+    private string? selectedCity;
+
+    protected override async Task OnInitializedAsync()
+    {
+        countries = await HotelService.GetAllCountriesAsync();
+    }
+    private void CreateNewHotel()
+    {
+        Navigation.NavigateTo("/hotels/create");
+    }
+
+
+    private async Task OnCountryChanged(ChangeEventArgs e)
+    {
+        selectedCity = null;
+        selectedCountry = e.Value?.ToString();
+        if (!string.IsNullOrEmpty(selectedCountry))
+        {
+            cities = await HotelService.GetCitiesByCountryAsync(selectedCountry);
+        }
+        hotels = new(); // Nulstil hotel-listen
+    }
+
+    private async Task LoadHotels()
+    {
+        if (!string.IsNullOrEmpty(selectedCountry) && !string.IsNullOrEmpty(selectedCity))
+        {
+            hotels = await HotelService.GetHotelsByCountryAndCityAsync(selectedCountry, selectedCity);
+        }
+    }
+
+    private void EditHotel(int id)
+    {
+        Navigation.NavigateTo($"/hotels/edit/{id}");
+    }
+
+    private async Task ConfirmDeleteHotel(int id)
+    {
+        var confirm = await JSRuntime.InvokeAsync<bool>("confirm", $"Er du sikker på, at du vil slette dette hotel?");
+        if (confirm)
+        {
+            await HotelService.DeleteHotelAsync(id);
+            await LoadHotels();
+        }
+    }
+}
+}

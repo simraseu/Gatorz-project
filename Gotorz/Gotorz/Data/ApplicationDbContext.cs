@@ -18,6 +18,7 @@ namespace Gotorz.Data
         public DbSet<TravelPackage> TravelPackages { get; set; }
         public DbSet<FlightInfo> FlightInfos { get; set; }
         public DbSet<HotelInfo> HotelInfos { get; set; }
+        public DbSet<Hotel> Hotels { get; set; }
 
         public DbSet<ChatMessage> ChatMessages { get; set; } 
 
