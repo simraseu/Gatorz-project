@@ -12,6 +12,8 @@ namespace Gatorz.Services
         Task<List<Booking>> GetUserBookingsAsync(string userEmail);
         Task<Booking> GetBookingByIdAsync(int bookingId);
         Task<Booking> GetBookingByIdForUserAsync(int bookingId, string userEmail);
+        Task<bool> CancelBookingAsync(int bookingId, string userEmail);
+        Task<List<Booking>> GetAllBookingsAsync(int skip = 0, int take = 50);
     }
 
     public class BookingService : IBookingService
@@ -60,18 +62,31 @@ namespace Gatorz.Services
                     await _context.SaveChangesAsync();
                 }
 
-                // Create the travel package entity
+                // Create the booking first
+                var booking = new Booking
+                {
+                    UserId = user.Id,
+                    BookingDate = DateTime.UtcNow,
+                    TotalPrice = package.Price,
+                    Status = "Confirmed"
+                };
+
+                _context.Bookings.Add(booking);
+                await _context.SaveChangesAsync(); // Save to get booking ID
+
+                // Create the travel package entity linked to the booking
                 var travelPackage = new TravelPackage
                 {
                     Destination = package.Destination,
                     StartDate = package.StartDate,
                     EndDate = package.EndDate,
                     Price = package.Price,
-                    Description = package.Description ?? $"Travel package to {package.Destination}"
+                    Description = package.Description ?? $"Travel package to {package.Destination}",
+                    BookingId = booking.Id
                 };
 
                 _context.TravelPackages.Add(travelPackage);
-                await _context.SaveChangesAsync(); // Save to get the ID
+                await _context.SaveChangesAsync(); // Save to get the travel package ID
 
                 // Create flight info if available
                 if (package.Flight != null)
@@ -110,23 +125,6 @@ namespace Gatorz.Services
                 }
 
                 await _context.SaveChangesAsync(); // Save flight and hotel info
-
-                // Create the booking
-                var booking = new Booking
-                {
-                    UserId = user.Id,
-                    BookingDate = DateTime.UtcNow,
-                    TotalPrice = package.Price,
-                    Status = "Confirmed"
-                };
-
-                _context.Bookings.Add(booking);
-                await _context.SaveChangesAsync(); // Save to get booking ID
-
-                // Link the travel package to the booking
-                travelPackage.BookingId = booking.Id;
-                _context.TravelPackages.Update(travelPackage);
-                await _context.SaveChangesAsync();
 
                 // Commit the transaction
                 await transaction.CommitAsync();
@@ -223,6 +221,97 @@ namespace Gatorz.Services
                 _logger.LogError($"Error getting booking {bookingId} for user {userEmail}: {ex.Message}");
                 throw;
             }
+        }
+
+        public async Task<bool> CancelBookingAsync(int bookingId, string userEmail)
+        {
+            try
+            {
+                var booking = await GetBookingByIdForUserAsync(bookingId, userEmail);
+                if (booking == null)
+                {
+                    _logger.LogWarning($"Booking {bookingId} not found for user {userEmail}");
+                    return false;
+                }
+
+                // Check if booking can be cancelled (business logic)
+                var tripStartDate = booking.TravelPackages.FirstOrDefault()?.StartDate;
+                if (tripStartDate.HasValue && tripStartDate.Value <= DateTime.Now.AddDays(1))
+                {
+                    _logger.LogWarning($"Cannot cancel booking {bookingId} - trip starts too soon");
+                    return false;
+                }
+
+                booking.Status = "Cancelled";
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation($"Successfully cancelled booking {bookingId} for user {userEmail}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error cancelling booking {bookingId} for user {userEmail}: {ex.Message}");
+                throw;
+            }
+        }
+
+        public async Task<List<Booking>> GetAllBookingsAsync(int skip = 0, int take = 50)
+        {
+            try
+            {
+                return await _context.Bookings
+                    .Include(b => b.TravelPackages)
+                        .ThenInclude(tp => tp.Flight)
+                    .Include(b => b.TravelPackages)
+                        .ThenInclude(tp => tp.Hotel)
+                    .Include(b => b.User)
+                    .OrderByDescending(b => b.BookingDate)
+                    .Skip(skip)
+                    .Take(take)
+                    .ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error getting all bookings: {ex.Message}");
+                throw;
+            }
+        }
+
+        // Helper method for business logic validations
+        private bool CanBookPackage(TravelPackageViewModel package)
+        {
+            // Check if trip is in the future
+            if (package.StartDate <= DateTime.Now.Date)
+            {
+                return false;
+            }
+
+            // Check if booking is made at least 24 hours in advance
+            if (package.StartDate <= DateTime.Now.Date.AddDays(1))
+            {
+                return false;
+            }
+
+            // Add other business logic validations here
+            return true;
+        }
+
+        private decimal CalculateRefundAmount(Booking booking)
+        {
+            var tripStartDate = booking.TravelPackages.FirstOrDefault()?.StartDate;
+            if (!tripStartDate.HasValue)
+            {
+                return 0;
+            }
+
+            var daysUntilTrip = (tripStartDate.Value - DateTime.Now.Date).Days;
+
+            return daysUntilTrip switch
+            {
+                >= 30 => booking.TotalPrice * 0.9m, // 90% refund
+                >= 15 => booking.TotalPrice * 0.5m, // 50% refund
+                _ => 0 // No refund
+            };
         }
     }
 }
