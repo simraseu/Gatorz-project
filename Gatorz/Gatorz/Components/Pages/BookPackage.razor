@@ -13,6 +13,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject UserManager<ApplicationUser> UserManager
 @inject IActivityLogService ActivityLogService
+@inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
 <PageTitle>Book Travel Package - Gatorz</PageTitle>
@@ -38,7 +39,7 @@
     {
         <div class="alert alert-warning">
             <h4>Package Not Found</h4>
-            <p>The requested travel package could not be found.</p>
+            <p>The requested travel package could not be found or may have expired.</p>
             <a href="/search" class="btn btn-primary">Return to Search</a>
         </div>
     }
@@ -52,9 +53,23 @@
             <p class="lead">Your trip to @travelPackage.Destination has been successfully booked.</p>
             <p>Booking Reference: <strong>#@newBookingId</strong></p>
 
+            <div class="card mx-auto" style="max-width: 500px;">
+                <div class="card-body">
+                    <h5 class="card-title">Booking Summary</h5>
+                    <div class="text-start">
+                        <p><strong>Destination:</strong> @travelPackage.Destination</p>
+                        <p><strong>Travel Dates:</strong> @travelPackage.StartDate.ToString("MMM d") - @travelPackage.EndDate.ToString("MMM d, yyyy")</p>
+                        <p><strong>Duration:</strong> @travelPackage.GetDuration()</p>
+                        <p><strong>Total Price:</strong> $@travelPackage.GetFormattedPrice()</p>
+                        <p><strong>Status:</strong> <span class="badge bg-success">Confirmed</span></p>
+                    </div>
+                </div>
+            </div>
+
             <div class="mt-4">
                 <a href="/customer/booking/@newBookingId" class="btn btn-primary me-2">View Booking Details</a>
-                <a href="/customer/bookings" class="btn btn-outline-primary">My Bookings</a>
+                <a href="/customer/bookings" class="btn btn-outline-primary me-2">My Bookings</a>
+                <a href="/search" class="btn btn-outline-secondary">Search More Trips</a>
             </div>
         </div>
     }
@@ -79,12 +94,22 @@
                                 <p class="mb-1"><i class="bi bi-airplane"></i> @travelPackage.Airline</p>
                                 <p class="mb-1">Departure: @travelPackage.FlightDepartureTime.ToString("h:mm tt, MMM d")</p>
                                 <p class="mb-1">Arrival: @travelPackage.FlightArrivalTime.ToString("h:mm tt, MMM d")</p>
+                                @if (travelPackage.Flight != null)
+                                {
+                                    <p class="mb-1">Flight: @travelPackage.Flight.FlightNumber</p>
+                                    <p class="mb-1">Route: @travelPackage.Flight.DepartureAirport → @travelPackage.Flight.ArrivalAirport</p>
+                                }
                             </div>
                             <div class="col-md-6">
                                 <h6>Hotel Details</h6>
                                 <p class="mb-1"><i class="bi bi-building"></i> @travelPackage.HotelName</p>
                                 <p class="mb-1">Rating: <span class="hotel-stars">@travelPackage.GetStars()</span></p>
                                 <p class="mb-1">Duration: @travelPackage.GetDuration()</p>
+                                @if (travelPackage.Hotel != null)
+                                {
+                                    <p class="mb-1">Room: @travelPackage.Hotel.RoomType</p>
+                                    <p class="mb-1">Location: @travelPackage.Hotel.City</p>
+                                }
                             </div>
                         </div>
                     </div>
@@ -130,16 +155,16 @@
 
                         <div class="mb-3">
                             <label class="form-label">Card Number</label>
-                            <input type="text" class="form-control" placeholder="1234 5678 9012 3456" />
+                            <input type="text" class="form-control" placeholder="1234 5678 9012 3456" @bind="cardNumber" />
                         </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Expiry Date</label>
-                                <input type="text" class="form-control" placeholder="MM/YY" />
+                                <input type="text" class="form-control" placeholder="MM/YY" @bind="expiryDate" />
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">CVV</label>
-                                <input type="text" class="form-control" placeholder="123" />
+                                <input type="text" class="form-control" placeholder="123" @bind="cvv" />
                             </div>
                         </div>
                     </div>
@@ -179,7 +204,7 @@
                                 </label>
                             </div>
 
-                            <button class="btn btn-primary btn-lg w-100" @onclick="ConfirmBooking" disabled="@(!acceptedTerms || isProcessing)">
+                            <button class="btn btn-primary btn-lg w-100" @onclick="ConfirmBooking" disabled="@(!IsBookingValid() || isProcessing)">
                                 @if (isProcessing)
                                 {
                                     <span class="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -187,7 +212,7 @@
                                 }
                                 else
                                 {
-                                    <span>Confirm Booking</span>
+                                    <span>Confirm Booking - $@travelPackage.GetFormattedPrice()</span>
                                 }
                             </button>
                         </div>
@@ -242,6 +267,11 @@
     private bool bookingConfirmed = false;
     private int newBookingId = 0;
 
+    // Payment form fields (for demo)
+    private string cardNumber = "";
+    private string expiryDate = "";
+    private string cvv = "";
+
     protected override async Task OnInitializedAsync()
     {
         try
@@ -252,12 +282,18 @@
             var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
             currentUser = await UserManager.GetUserAsync(authState.User);
 
+            if (currentUser == null)
+            {
+                errorMessage = "You must be logged in to book a travel package.";
+                return;
+            }
+
             // Load the travel package details
             travelPackage = await TravelPackageService.GetPackageByIdAsync(PackageId);
 
             if (travelPackage == null)
             {
-                errorMessage = "Travel package not found.";
+                errorMessage = "Travel package not found or may have expired. Please search again.";
             }
         }
         catch (Exception ex)
@@ -271,14 +307,25 @@
         }
     }
 
+    private bool IsBookingValid()
+    {
+        return acceptedTerms &&
+               !string.IsNullOrWhiteSpace(cardNumber) &&
+               !string.IsNullOrWhiteSpace(expiryDate) &&
+               !string.IsNullOrWhiteSpace(cvv);
+    }
+
     private async Task ConfirmBooking()
     {
-        if (!acceptedTerms || isProcessing)
+        if (!IsBookingValid() || isProcessing || currentUser == null)
             return;
 
         try
         {
             isProcessing = true;
+            StateHasChanged();
+
+            Logger.LogInformation($"Starting booking process for user {currentUser.Email}, package {PackageId}");
 
             // Create the booking
             var booking = await BookingService.CreateBookingAsync(currentUser.Email, travelPackage);
@@ -286,21 +333,26 @@
 
             // Log the activity
             await ActivityLogService.LogActivityAsync(currentUser.Id, "Booking Created",
-                $"Booked trip to {travelPackage.Destination} for ${travelPackage.Price}");
+                $"Booked trip to {travelPackage.Destination} for ${travelPackage.Price:N2}");
 
             // Mark as confirmed
             bookingConfirmed = true;
 
             Logger.LogInformation($"Booking {booking.Id} created successfully for user {currentUser.Email}");
+
+            // Scroll to top to show confirmation
+            await JSRuntime.InvokeVoidAsync("window.scrollTo", 0, 0);
         }
         catch (Exception ex)
         {
             errorMessage = $"Error creating booking: {ex.Message}";
             Logger.LogError($"Error in ConfirmBooking: {ex}");
+            Logger.LogError($"Stack trace: {ex.StackTrace}");
         }
         finally
         {
             isProcessing = false;
+            StateHasChanged();
         }
     }
 }
