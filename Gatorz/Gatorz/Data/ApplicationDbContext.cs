@@ -47,15 +47,28 @@ namespace Gatorz.Data
                 .WithMany(u => u.Bookings)
                 .HasForeignKey(b => b.UserId);
 
+            // TravelPackage to Booking (optional - a package can exist without being booked)
             builder.Entity<TravelPackage>()
-                .HasOne(tp => tp.Flight)
-                .WithOne(f => f.TravelPackage)
-                .HasForeignKey<FlightInfo>(f => f.TravelPackageId);
+                .HasOne(tp => tp.Booking)
+                .WithMany(b => b.TravelPackages)
+                .HasForeignKey(tp => tp.BookingId)
+                .OnDelete(DeleteBehavior.SetNull);
 
-            builder.Entity<TravelPackage>()
-                .HasOne(tp => tp.Hotel)
-                .WithOne(h => h.TravelPackage)
-                .HasForeignKey<HotelInfo>(h => h.TravelPackageId);
+            // TravelPackage to FlightInfo (required - every package must have a flight)
+            builder.Entity<FlightInfo>()
+                .HasOne(f => f.TravelPackage)
+                .WithOne(tp => tp.Flight)
+                .HasForeignKey<FlightInfo>(f => f.TravelPackageId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired();
+
+            // TravelPackage to HotelInfo (required - every package must have a hotel)
+            builder.Entity<HotelInfo>()
+                .HasOne(h => h.TravelPackage)
+                .WithOne(tp => tp.Hotel)
+                .HasForeignKey<HotelInfo>(h => h.TravelPackageId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired();
 
             // Configure indexes for performance
             builder.Entity<ActivityLog>()

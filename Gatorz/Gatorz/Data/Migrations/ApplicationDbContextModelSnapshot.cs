@@ -17,7 +17,7 @@ namespace Gatorz.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.3")
+                .HasAnnotation("ProductVersion", "8.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -523,7 +523,7 @@ namespace Gatorz.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AppUsers");
+                    b.ToTable("AppUsers", (string)null);
                 });
 
             modelBuilder.Entity("Booking", b =>
@@ -612,9 +612,12 @@ namespace Gatorz.Migrations
 
             modelBuilder.Entity("TravelPackage", b =>
                 {
-                    b.HasOne("Booking", null)
+                    b.HasOne("Booking", "Booking")
                         .WithMany("TravelPackages")
-                        .HasForeignKey("BookingId");
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Booking");
                 });
 
             modelBuilder.Entity("Booking", b =>
