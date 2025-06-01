@@ -13,10 +13,7 @@ namespace Gotorz
     {
         public static async Task Main(string[] args)
         {
-            var builder = WebApplication.CreateBuilder(args);
-
-            builder.Services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+            var builder = WebApplication.CreateBuilder(args);    
 
             // Add services to the container.
             builder.Services.AddRazorComponents()
@@ -43,16 +40,22 @@ namespace Gotorz
             // Get connection string based on environment
             var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-            // For Azure deployment
-            if (builder.Environment.IsProduction())
-            {
-                connectionString = Environment.GetEnvironmentVariable("SQLAZURECONNSTR_DefaultConnection")
-                                  ?? builder.Configuration.GetConnectionString("DefaultConnection");
-            }
+            // Check if we're running on Azure (more reliable check)
+            var isAzure = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
 
-            // Add DbContext with the selected connection string
-            builder.Services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseSqlServer(connectionString));
+            if (isAzure)
+            {
+                // Running on Azure - use SQLite
+                connectionString = "Data Source=gotorz.db";
+                builder.Services.AddDbContext<ApplicationDbContext>(options =>
+                    options.UseSqlite(connectionString));
+            }
+            else
+            {
+                // Local development - use SQL Server
+                builder.Services.AddDbContext<ApplicationDbContext>(options =>
+                    options.UseSqlServer(connectionString));
+            }
             builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
             builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = false)
@@ -121,10 +124,16 @@ namespace Gotorz
             // Add additional endpoints required by the Identity /Account Razor components.
             app.MapAdditionalIdentityEndpoints();
 
-            // Seed roles and admin user
+            // Create database and seed data
             using (var scope = app.Services.CreateScope())
             {
                 var serviceProvider = scope.ServiceProvider;
+                var context = serviceProvider.GetRequiredService<ApplicationDbContext>();
+
+                // Ensure database is created
+                await context.Database.EnsureCreatedAsync();
+
+                // Seed roles and admin user
                 await SeedRolesAndAdminUser(serviceProvider);
             }
 
