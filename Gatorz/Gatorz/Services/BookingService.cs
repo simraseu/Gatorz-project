@@ -21,15 +21,21 @@ namespace Gatorz.Services
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly ILogger<BookingService> _logger;
+        private readonly IActivityLogService _activityLogService;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
         public BookingService(
             ApplicationDbContext context,
             UserManager<ApplicationUser> userManager,
-            ILogger<BookingService> logger)
+            ILogger<BookingService> logger,
+            IActivityLogService activityLogService,
+        IHttpContextAccessor httpContextAccessor)
         {
             _context = context;
             _userManager = userManager;
             _logger = logger;
+             _activityLogService = activityLogService;
+        _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<Booking> CreateBookingAsync(string userEmail, TravelPackageViewModel package)
@@ -125,6 +131,14 @@ namespace Gatorz.Services
                 }
 
                 await _context.SaveChangesAsync(); // Save flight and hotel info
+
+                // ** AUDIT LOG - Booking Created **
+                await _activityLogService.LogActivityAsync(
+                    identityUser.Id,
+                    "Booking Created",
+                    $"Created booking for {package.Destination} from {package.StartDate:yyyy-MM-dd} to {package.EndDate:yyyy-MM-dd} - Total: ${package.Price}",
+                    _httpContextAccessor.HttpContext
+                );
 
                 // Commit the transaction
                 await transaction.CommitAsync();
@@ -243,6 +257,20 @@ namespace Gatorz.Services
                 }
 
                 booking.Status = "Cancelled";
+
+                // ** AUDIT LOG - Booking Cancelled **
+                var identityUser = await _userManager.FindByEmailAsync(userEmail);
+                if (identityUser != null)
+                {
+                    var destination = booking.TravelPackages.FirstOrDefault()?.Destination ?? "Unknown";
+                    await _activityLogService.LogActivityAsync(
+                        identityUser.Id,
+                        "Booking Cancelled",
+                        $"Cancelled booking {bookingId} for {destination} - Originally scheduled for {tripStartDate:yyyy-MM-dd}",
+                        _httpContextAccessor.HttpContext
+                    );
+                }
+
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation($"Successfully cancelled booking {bookingId} for user {userEmail}");

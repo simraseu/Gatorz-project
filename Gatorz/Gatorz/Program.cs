@@ -159,4 +159,50 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+app.MapAdditionalIdentityEndpoints();
+
+// Custom logout endpoint with activity logging
+app.MapPost("/Account/CustomLogout", async (HttpContext context, SignInManager<ApplicationUser> signInManager,
+    UserManager<ApplicationUser> userManager, IActivityLogService activityLogService) =>
+{
+    try
+    {
+        // Get current user before signing out
+        var user = await userManager.GetUserAsync(context.User);
+
+        // Sign out the user
+        await signInManager.SignOutAsync();
+
+        // Log the logout activity
+        if (user != null)
+        {
+            await activityLogService.LogActivityAsync(
+                user.Id,
+                "User Logout",
+                "User logged out successfully",
+                context
+            );
+        }
+
+        // Get return URL or default to home
+        var returnUrl = context.Request.Form["returnUrl"].FirstOrDefault();
+        if (string.IsNullOrEmpty(returnUrl))
+        {
+            returnUrl = "/";
+        }
+
+        // Use Results.Redirect instead of context.Response.Redirect
+        return Results.Redirect(returnUrl);
+    }
+    catch (Exception ex)
+    {
+        // Log error but still sign out
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError($"Error during logout logging: {ex.Message}");
+
+        await signInManager.SignOutAsync();
+        return Results.Redirect("/");
+    }
+});
+
 app.Run();

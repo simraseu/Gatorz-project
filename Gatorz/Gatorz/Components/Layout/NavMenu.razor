@@ -71,12 +71,10 @@
             }
 
             <div class="nav-item px-3">
-                <form action="Account/Logout" method="post">
+                <form action="Account/CustomLogout" method="post">
                     <AntiforgeryToken />
                     <input type="hidden" name="returnUrl" value="" />
-                    <button type="submit" class="nav-link" style="border:none; background:none; width:100%; text-align:left;">
-                        <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Logout
-                    </button>
+                    <button type="submit" class="nav-link">Logout</button>
                 </form>
             </div>
         }

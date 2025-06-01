@@ -10,6 +10,8 @@
 @inject UserManager<ApplicationUser> UserManager
 @inject IJSRuntime JSRuntime
 @inject ILogger<PackageDetails> Logger
+@inject IActivityLogService ActivityLogService
+@inject IHttpContextAccessor HttpContextAccessor
 @rendermode InteractiveServer
 
 <PageTitle>Travel Package Details - Gatorz</PageTitle>
@@ -417,6 +419,27 @@
             else
             {
                 Logger.LogInformation($"Successfully loaded package: {travelPackage.Destination}");
+
+                // ** AUDIT LOG - Package View **
+                if (currentUser != null)
+                {
+                    await ActivityLogService.LogActivityAsync(
+                        currentUser.Id,
+                        "Package Viewed",
+                        $"Viewed package: {travelPackage.Destination} (ID: {PackageId})",
+                        HttpContextAccessor.HttpContext
+                    );
+                }
+                else
+                {
+                    // Log anonymous view (optional)
+                    await ActivityLogService.LogActivityAsync(
+                        "anonymous",
+                        "Package Viewed (Anonymous)",
+                        $"Anonymous user viewed package: {travelPackage.Destination} (ID: {PackageId})",
+                        HttpContextAccessor.HttpContext
+                    );
+                }
             }
         }
         catch (Exception ex)
@@ -542,6 +565,7 @@
 
         return "This package is currently not available for booking.";
     }
+
 
     private void CloseLoginModal()
     {

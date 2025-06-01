@@ -1,6 +1,7 @@
 ﻿@page "/admin/dashboard"
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Identity
+@using Gatorz.Services
 @using Gatorz.Data
 @using Microsoft.EntityFrameworkCore
 @inject UserManager<ApplicationUser> UserManager
@@ -81,6 +82,20 @@
                 </div>
             </div>
         </div>
+        <!-- Activity Monitoring -->
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Activity Monitoring</h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <p>Monitor user activities, logins, and security events for audit trails and compliance.</p>
+                    <div class="mt-auto">
+                        <a href="/admin/activity" class="btn btn-primary w-100">View Activity Log</a>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Bookings -->
         <div class="col-md-4 mb-4">
@@ -152,6 +167,10 @@
     private int CancelledBookingsCount { get; set; }
     private int PackagesCount { get; set; }
     private decimal TotalRevenue { get; set; }
+    private int TodayLoginCount;
+    private int TodayFailedLoginCount;
+    private int TotalActivityCount;
+    private int Last24HoursActivityCount;
     private string RevenueFormatted => TotalRevenue.ToString("N0");
     private List<string> RecentDestinations { get; set; } = new List<string>();
 
@@ -164,6 +183,7 @@
         var customerRole = await RoleManager.FindByNameAsync("Customer");
         var salesAgentRole = await RoleManager.FindByNameAsync("SalesAgent");
         var adminRole = await RoleManager.FindByNameAsync("Admin");
+      
 
         if (customerRole != null)
         {
@@ -203,4 +223,5 @@
             .Take(5)
             .ToListAsync();
     }
+
 }
