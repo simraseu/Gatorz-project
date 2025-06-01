@@ -40,7 +40,17 @@ namespace Gotorz
             })
                 .AddIdentityCookies();
 
-            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+            // Get connection string based on environment
+            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+            // For Azure deployment
+            if (builder.Environment.IsProduction())
+            {
+                connectionString = Environment.GetEnvironmentVariable("SQLAZURECONNSTR_DefaultConnection")
+                                  ?? builder.Configuration.GetConnectionString("DefaultConnection");
+            }
+
+            // Add DbContext with the selected connection string
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseSqlServer(connectionString));
             builder.Services.AddDatabaseDeveloperPageExceptionFilter();
