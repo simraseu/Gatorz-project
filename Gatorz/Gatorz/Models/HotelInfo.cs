@@ -14,7 +14,7 @@
         public decimal PricePerNight { get; set; }
 
         // Relation til TravelPackage
-        public int TravelPackageId { get; set; }
+        public int? TravelPackageId { get; set; }
         public TravelPackage TravelPackage { get; set; }
     }
 }

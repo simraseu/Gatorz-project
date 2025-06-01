@@ -1,6 +1,7 @@
 ﻿@page "/package/book/{PackageId}"
 @using Gatorz.Models
 @using Gatorz.Services
+@using Gatorz.Data
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.Components.Authorization
@@ -13,6 +14,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject UserManager<ApplicationUser> UserManager
 @inject IActivityLogService ActivityLogService
+@inject IJSRuntime JSRuntime
 @rendermode InteractiveServer
 
 <PageTitle>Book Travel Package - Gatorz</PageTitle>
@@ -31,7 +33,10 @@
         <div class="alert alert-danger">
             <h4>Error</h4>
             <p>@errorMessage</p>
-            <a href="/search" class="btn btn-primary">Return to Search</a>
+            <div class="mt-3">
+                <a href="/search" class="btn btn-primary me-2">Return to Search</a>
+                <a href="/package/@PackageId" class="btn btn-outline-secondary">Back to Package Details</a>
+            </div>
         </div>
     }
     else if (travelPackage == null)
@@ -52,15 +57,28 @@
             <p class="lead">Your trip to @travelPackage.Destination has been successfully booked.</p>
             <p>Booking Reference: <strong>#@newBookingId</strong></p>
 
+            <div class="card mt-4 mb-4 mx-auto" style="max-width: 500px;">
+                <div class="card-body">
+                    <h5 class="card-title">Next Steps</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="bi bi-check2 text-success"></i> Confirmation email sent to @currentUser?.Email</li>
+                        <li><i class="bi bi-check2 text-success"></i> Flight and hotel reservations confirmed</li>
+                        <li><i class="bi bi-check2 text-success"></i> Travel itinerary available in your account</li>
+                    </ul>
+                </div>
+            </div>
+
             <div class="mt-4">
-                <a href="/customer/booking/@newBookingId" class="btn btn-primary me-2">View Booking Details</a>
+                <a href="/customer/booking/@newBookingId" class="btn btn-primary btn-lg me-2">View Booking Details</a>
                 <a href="/customer/bookings" class="btn btn-outline-primary">My Bookings</a>
+                <a href="/search" class="btn btn-outline-secondary ms-2">Book Another Trip</a>
             </div>
         </div>
     }
     else
     {
         <h1>Complete Your Booking</h1>
+        <p class="lead">You're just one step away from your amazing trip!</p>
 
         <div class="row">
             <div class="col-md-8">
@@ -79,12 +97,20 @@
                                 <p class="mb-1"><i class="bi bi-airplane"></i> @travelPackage.Airline</p>
                                 <p class="mb-1">Departure: @travelPackage.FlightDepartureTime.ToString("h:mm tt, MMM d")</p>
                                 <p class="mb-1">Arrival: @travelPackage.FlightArrivalTime.ToString("h:mm tt, MMM d")</p>
+                                @if (travelPackage.ReturnFlightIncluded)
+                                {
+                                    <p class="mb-1"><i class="bi bi-arrow-repeat"></i> Round-trip flight included</p>
+                                }
                             </div>
                             <div class="col-md-6">
                                 <h6>Hotel Details</h6>
                                 <p class="mb-1"><i class="bi bi-building"></i> @travelPackage.HotelName</p>
                                 <p class="mb-1">Rating: <span class="hotel-stars">@travelPackage.GetStars()</span></p>
                                 <p class="mb-1">Duration: @travelPackage.GetDuration()</p>
+                                @if (travelPackage.Hotel?.RoomType != null)
+                                {
+                                    <p class="mb-1">Room: @travelPackage.Hotel.RoomType</p>
+                                }
                             </div>
                         </div>
                     </div>
@@ -98,17 +124,27 @@
                     <div class="card-body">
                         @if (currentUser != null)
                         {
-                            <div class="mb-3">
-                                <label class="form-label">Primary Traveler</label>
-                                <input type="text" class="form-control" value="@($"{currentUser.FirstName} {currentUser.LastName}")" readonly />
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Email</label>
-                                <input type="text" class="form-control" value="@currentUser.Email" readonly />
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Phone</label>
-                                <input type="text" class="form-control" value="@(currentUser.PhoneNumber ?? "Not provided")" readonly />
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Primary Traveler</label>
+                                        <input type="text" class="form-control" value="@($"{currentUser.FirstName} {currentUser.LastName}")" readonly />
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Email</label>
+                                        <input type="text" class="form-control" value="@currentUser.Email" readonly />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Phone</label>
+                                        <input type="text" class="form-control" value="@(currentUser.PhoneNumber ?? "Not provided")" readonly />
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Address</label>
+                                        <input type="text" class="form-control" value="@(currentUser.Address ?? "Not provided")" readonly />
+                                    </div>
+                                </div>
                             </div>
                         }
                         <p class="text-muted">
@@ -128,19 +164,54 @@
                             <i class="bi bi-info-circle"></i> This is a demo booking system. No actual payment will be processed.
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">Card Number</label>
-                            <input type="text" class="form-control" placeholder="1234 5678 9012 3456" />
-                        </div>
                         <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Expiry Date</label>
-                                <input type="text" class="form-control" placeholder="MM/YY" />
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Card Number</label>
+                                    <input type="text" class="form-control" placeholder="1234 5678 9012 3456" @bind="cardNumber" />
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Cardholder Name</label>
+                                    <input type="text" class="form-control" placeholder="John Smith" @bind="cardholderName" />
+                                </div>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">CVV</label>
-                                <input type="text" class="form-control" placeholder="123" />
+                            <div class="col-md-6">
+                                <div class="row">
+                                    <div class="col-6 mb-3">
+                                        <label class="form-label">Expiry Date</label>
+                                        <input type="text" class="form-control" placeholder="MM/YY" @bind="expiryDate" />
+                                    </div>
+                                    <div class="col-6 mb-3">
+                                        <label class="form-label">CVV</label>
+                                        <input type="text" class="form-control" placeholder="123" @bind="cvv" />
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Billing Zip Code</label>
+                                    <input type="text" class="form-control" placeholder="12345" @bind="zipCode" />
+                                </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Special Requests -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Special Requests (Optional)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Special Requirements</label>
+                            <textarea class="form-control" rows="3"
+                                      placeholder="Dietary restrictions, accessibility needs, special occasions, etc."
+                                      @bind="specialRequests"></textarea>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="travelInsurance" @bind="travelInsurance" />
+                            <label class="form-check-label" for="travelInsurance">
+                                Add travel insurance (+$49)
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -161,6 +232,13 @@
                             <span>Hotel (@travelPackage.GetDuration())</span>
                             <span>$@((travelPackage.Hotel?.PricePerNight * (travelPackage.EndDate - travelPackage.StartDate).Days)?.ToString("N2") ?? "0")</span>
                         </div>
+                        @if (travelInsurance)
+                        {
+                            <div class="price-item">
+                                <span>Travel Insurance</span>
+                                <span>$49.00</span>
+                            </div>
+                        }
                         <div class="price-item">
                             <span>Taxes & Fees</span>
                             <span>Included</span>
@@ -168,28 +246,44 @@
                         <hr />
                         <div class="price-total">
                             <span>Total</span>
-                            <span>$@travelPackage.GetFormattedPrice()</span>
+                            <span>$@GetTotalPrice()</span>
                         </div>
 
                         <div class="mt-4">
                             <div class="form-check mb-3">
                                 <input class="form-check-input" type="checkbox" id="termsCheck" @bind="acceptedTerms" />
                                 <label class="form-check-label" for="termsCheck">
-                                    I accept the <a href="#" target="_blank">terms and conditions</a>
+                                    I accept the <a href="#" target="_blank">terms and conditions</a> and
+                                    <a href="#" target="_blank">cancellation policy</a>
                                 </label>
                             </div>
 
-                            <button class="btn btn-primary btn-lg w-100" @onclick="ConfirmBooking" disabled="@(!acceptedTerms || isProcessing)">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="newsletterCheck" @bind="subscribeNewsletter" />
+                                <label class="form-check-label" for="newsletterCheck">
+                                    Subscribe to our newsletter for exclusive offers
+                                </label>
+                            </div>
+
+                            <button class="btn btn-primary btn-lg w-100" @onclick="ConfirmBooking"
+                                    disabled="@(!acceptedTerms || isProcessing || !IsFormValid())">
                                 @if (isProcessing)
                                 {
                                     <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                                    <span>Processing...</span>
+                                    <span>Processing Booking...</span>
                                 }
                                 else
                                 {
-                                    <span>Confirm Booking</span>
+                                    <span>Confirm Booking - $@GetTotalPrice()</span>
                                 }
                             </button>
+
+                            @if (!IsFormValid() && !isProcessing)
+                            {
+                                <div class="alert alert-warning mt-2">
+                                    <small>Please fill in all required payment fields.</small>
+                                </div>
+                            }
                         </div>
                     </div>
                 </div>
@@ -202,6 +296,7 @@
                             <p><i class="bi bi-shield-check"></i> Your information is secure</p>
                             <p><i class="bi bi-lock"></i> SSL encrypted transaction</p>
                             <p><i class="bi bi-headset"></i> 24/7 customer support</p>
+                            <p><i class="bi bi-award"></i> Best price guarantee</p>
                         </div>
                     </div>
                 </div>
@@ -215,6 +310,7 @@
         display: flex;
         justify-content: space-between;
         margin-bottom: 0.5rem;
+        padding: 0.25rem 0;
     }
 
     .price-total {
@@ -222,6 +318,9 @@
         justify-content: space-between;
         font-weight: bold;
         font-size: 1.2rem;
+        padding: 0.5rem 0;
+        border-top: 2px solid #0d6efd;
+        margin-top: 0.5rem;
     }
 
     .hotel-stars {
@@ -239,18 +338,36 @@
     private bool isProcessing = false;
     private string errorMessage;
     private bool acceptedTerms = false;
+    private bool subscribeNewsletter = false;
+    private bool travelInsurance = false;
     private bool bookingConfirmed = false;
     private int newBookingId = 0;
+
+    // Payment form fields
+    private string cardNumber = "";
+    private string cardholderName = "";
+    private string expiryDate = "";
+    private string cvv = "";
+    private string zipCode = "";
+    private string specialRequests = "";
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             isLoading = true;
+            Logger.LogInformation($"Loading booking page for package {PackageId}");
 
             // Get current user
             var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
             currentUser = await UserManager.GetUserAsync(authState.User);
+
+            if (currentUser == null)
+            {
+                Logger.LogWarning("User not found during booking initialization");
+                errorMessage = "Unable to load user information. Please try logging in again.";
+                return;
+            }
 
             // Load the travel package details
             travelPackage = await TravelPackageService.GetPackageByIdAsync(PackageId);
@@ -258,6 +375,13 @@
             if (travelPackage == null)
             {
                 errorMessage = "Travel package not found.";
+                Logger.LogWarning($"Package {PackageId} not found");
+            }
+            else
+            {
+                // Pre-fill form with user data
+                cardholderName = $"{currentUser.FirstName} {currentUser.LastName}";
+                Logger.LogInformation($"Successfully loaded package for booking: {travelPackage.Destination}");
             }
         }
         catch (Exception ex)
@@ -279,19 +403,32 @@
         try
         {
             isProcessing = true;
+            Logger.LogInformation($"Starting booking confirmation for user {currentUser.Email}");
 
-            // Create the booking
-            var booking = await BookingService.CreateBookingAsync(currentUser.Email, travelPackage);
+            // Simulate payment processing delay
+            await Task.Delay(2000);
+
+            // Create the booking with the updated price if insurance was added
+            var bookingPackage = travelPackage;
+            if (travelInsurance)
+            {
+                bookingPackage.Price += 49;
+            }
+
+            var booking = await BookingService.CreateBookingAsync(currentUser.Email, bookingPackage);
             newBookingId = booking.Id;
 
             // Log the activity
             await ActivityLogService.LogActivityAsync(currentUser.Id, "Booking Created",
-                $"Booked trip to {travelPackage.Destination} for ${travelPackage.Price}");
+                $"Booked trip to {travelPackage.Destination} for ${GetTotalPrice()}");
 
             // Mark as confirmed
             bookingConfirmed = true;
 
-            Logger.LogInformation($"Booking {booking.Id} created successfully for user {currentUser.Email}");
+            Logger.LogInformation($"Booking {booking.Id} confirmed successfully for user {currentUser.Email}");
+
+            // Scroll to top to show confirmation
+            await JSRuntime.InvokeVoidAsync("scrollTo", 0, 0);
         }
         catch (Exception ex)
         {
@@ -302,5 +439,27 @@
         {
             isProcessing = false;
         }
+    }
+
+    private bool IsFormValid()
+    {
+        return !string.IsNullOrWhiteSpace(cardNumber) &&
+               !string.IsNullOrWhiteSpace(cardholderName) &&
+               !string.IsNullOrWhiteSpace(expiryDate) &&
+               !string.IsNullOrWhiteSpace(cvv) &&
+               !string.IsNullOrWhiteSpace(zipCode);
+    }
+
+    private string GetTotalPrice()
+    {
+        if (travelPackage == null) return "0";
+
+        var total = travelPackage.Price;
+        if (travelInsurance)
+        {
+            total += 49;
+        }
+
+        return total.ToString("N0");
     }
 }

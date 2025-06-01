@@ -50,23 +50,25 @@ namespace Gatorz.Services
                     // Calculate total price
                     decimal totalPrice = flight.Price + (hotel.PricePerNight * stayDuration);
 
-                    // Create a package
+                    // Create a package with encoded parameters in the ID for later reconstruction
+                    var packageId = $"{origin}_{destination}_{departureDate:yyyyMMdd}_{returnDate:yyyyMMdd}_{flight.Id}_{hotel.Id}";
+
                     packages.Add(new TravelPackageViewModel
                     {
-                        Id = $"{flight.Id}-{hotel.Id}",
+                        Id = packageId,
                         Destination = destination,
                         OriginCity = origin,
                         StartDate = departureDate,
                         EndDate = returnDate,
                         Price = totalPrice,
-                        Description = $"Enjoy a {stayDuration}-night stay in {destination} at the {hotel.StarRating}-star {hotel.HotelName}, with direct flights via {flight.Airline}.",
+                        Description = $"Enjoy a {stayDuration}-night stay in {destination} at the {hotel.StarRating}-star {hotel.HotelName}, with flights via {flight.Airline}.",
                         Airline = flight.Airline,
                         HotelName = hotel.HotelName,
                         HotelRating = hotel.StarRating,
                         FlightDepartureTime = flight.DepartureTime,
                         FlightArrivalTime = flight.ArrivalTime,
                         ReturnFlightIncluded = true,
-                        ImageUrl = $"/images/{destination.ToLower()}.jpg", // You mentioned we can ignore images
+                        ImageUrl = GetDestinationImageUrl(destination),
                         Flight = flight,
                         Hotel = hotel
                     });
@@ -79,50 +81,99 @@ namespace Gatorz.Services
 
         public async Task<TravelPackageViewModel> GetPackageByIdAsync(string packageId)
         {
-            // Parse the package ID to get flight and hotel IDs
-            var parts = packageId.Split('-');
-            if (parts.Length != 2 || !int.TryParse(parts[0], out var flightId) || !int.TryParse(parts[1], out var hotelId))
+            // Parse the package ID to extract search parameters and IDs
+            var parts = packageId.Split('_');
+            if (parts.Length != 6)
             {
                 throw new ArgumentException("Invalid package ID format", nameof(packageId));
             }
 
-            // For simplicity, we'll search for all flights and hotels and then filter
-            // In a real application, you would have a database to store and retrieve packages
-            var flights = await _flightService.SearchFlightsAsync("", "", DateTime.Now);
-            var hotels = await _hotelService.SearchHotelsAsync("", DateTime.Now, DateTime.Now);
+            var origin = parts[0];
+            var destination = parts[1];
 
-            // Find the matching flight and hotel
+            if (!DateTime.TryParseExact(parts[2], "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out var departureDate))
+            {
+                throw new ArgumentException("Invalid departure date in package ID", nameof(packageId));
+            }
+
+            if (!DateTime.TryParseExact(parts[3], "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out var returnDate))
+            {
+                throw new ArgumentException("Invalid return date in package ID", nameof(packageId));
+            }
+
+            if (!int.TryParse(parts[4], out var flightId) || !int.TryParse(parts[5], out var hotelId))
+            {
+                throw new ArgumentException("Invalid flight or hotel ID in package ID", nameof(packageId));
+            }
+
+            // Re-run the search to get the same results (this ensures consistency)
+            var flightsTask = _flightService.SearchFlightsAsync(origin, destination, departureDate);
+            var hotelsTask = _hotelService.SearchHotelsAsync(destination, departureDate, returnDate);
+            await Task.WhenAll(flightsTask, hotelsTask);
+
+            var flights = flightsTask.Result;
+            var hotels = hotelsTask.Result;
+
+            // Find the matching flight and hotel by ID
             var flight = flights.FirstOrDefault(f => f.Id == flightId);
             var hotel = hotels.FirstOrDefault(h => h.Id == hotelId);
 
-            if (flight == null || hotel == null)
+            if (flight == null)
             {
-                throw new InvalidOperationException("Could not find the specified flight or hotel");
+                throw new InvalidOperationException($"Could not find flight with ID {flightId} for route {origin} to {destination}");
             }
 
-            // Calculate stay duration
-            int stayDuration = (int)(hotel.CheckOutDate - hotel.CheckInDate).TotalDays;
+            if (hotel == null)
+            {
+                throw new InvalidOperationException($"Could not find hotel with ID {hotelId} in {destination}");
+            }
+
+            // Calculate stay duration and total price
+            int stayDuration = (int)(returnDate - departureDate).TotalDays;
+            decimal totalPrice = flight.Price + (hotel.PricePerNight * stayDuration);
 
             // Create and return the package
             return new TravelPackageViewModel
             {
                 Id = packageId,
-                Destination = hotel.City,
-                OriginCity = flight.DepartureAirport,
-                StartDate = hotel.CheckInDate,
-                EndDate = hotel.CheckOutDate,
-                Price = flight.Price + (hotel.PricePerNight * stayDuration),
-                Description = $"Enjoy a {stayDuration}-night stay in {hotel.City} at the {hotel.StarRating}-star {hotel.HotelName}, with direct flights via {flight.Airline}.",
+                Destination = destination,
+                OriginCity = origin,
+                StartDate = departureDate,
+                EndDate = returnDate,
+                Price = totalPrice,
+                Description = $"Enjoy a {stayDuration}-night stay in {destination} at the {hotel.StarRating}-star {hotel.HotelName}, with flights via {flight.Airline}.",
                 Airline = flight.Airline,
                 HotelName = hotel.HotelName,
                 HotelRating = hotel.StarRating,
                 FlightDepartureTime = flight.DepartureTime,
                 FlightArrivalTime = flight.ArrivalTime,
                 ReturnFlightIncluded = true,
-                ImageUrl = $"/images/{hotel.City.ToLower()}.jpg", // You mentioned we can ignore images
+                ImageUrl = GetDestinationImageUrl(destination),
                 Flight = flight,
                 Hotel = hotel
             };
+        }
+
+        private string GetDestinationImageUrl(string destination)
+        {
+            // Map destination codes to image filenames
+            var imageMap = new Dictionary<string, string>
+            {
+                { "BCN", "/images/barcelona.jpg" },
+                { "ROM", "/images/rome.jpg" },
+                { "FCO", "/images/rome.jpg" },
+                { "PAR", "/images/paris.jpg" },
+                { "CDG", "/images/paris.jpg" },
+                { "LON", "/images/london.jpg" },
+                { "LHR", "/images/london.jpg" },
+                { "DXB", "/images/dubai.jpg" },
+                { "NYC", "/images/newyork.jpg" },
+                { "JFK", "/images/newyork.jpg" }
+            };
+
+            return imageMap.TryGetValue(destination.ToUpper(), out var imageUrl)
+                ? imageUrl
+                : "/images/default-destination.jpg";
         }
     }
 }

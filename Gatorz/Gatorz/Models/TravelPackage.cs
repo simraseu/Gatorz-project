@@ -8,6 +8,10 @@ public class TravelPackage
     public DateTime EndDate { get; set; }
     public decimal Price { get; set; }
     public string Description { get; set; }
+
     public FlightInfo Flight { get; set; }
     public HotelInfo Hotel { get; set; }
+
+    public int? BookingId { get; set; }
+    public Booking Booking { get; set; }
 }
