@@ -1,0 +1,1030 @@
+﻿@page "/sales/booking/{BookingId:int}"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Gotorz.Data
+@using Microsoft.EntityFrameworkCore
+@using Gotorz.Models
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize(Roles = "SalesAgent,Admin")]
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext DbContext
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Booking Details - Gotorz</PageTitle>
+
+<div class="container py-4">
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading booking details...</span>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger">
+            <h4>Error Loading Booking</h4>
+            <p>@errorMessage</p>
+            <a href="/sales/bookings" class="btn btn-primary">Return to Bookings</a>
+        </div>
+    }
+    else if (booking == null)
+    {
+        <div class="alert alert-warning">
+            <h4>Booking Not Found</h4>
+            <p>The requested booking could not be found.</p>
+            <a href="/sales/bookings" class="btn btn-primary">Return to Bookings</a>
+        </div>
+    }
+    else
+    {
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1>Booking #@booking.Id</h1>
+                <p class="lead text-muted">Booked on @booking.BookingDate.ToString("MMMM d, yyyy")</p>
+            </div>
+            <div>
+                <span class="badge bg-@GetStatusColor(booking.Status) fs-5 me-2">@booking.Status</span>
+                <div class="btn-group">
+                    <button class="btn btn-outline-primary" @onclick="() => showEditStatusModal = true">
+                        Change Status
+                    </button>
+                    <button class="btn btn-outline-primary" @onclick="() => showNotifyCustomerModal = true">
+                        Notify Customer
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-8">
+                <!-- Customer Information -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Customer Information</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (customer != null)
+                        {
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Name:</strong> @customer.FirstName @customer.LastName</p>
+                                    <p><strong>Email:</strong> @customer.Email</p>
+                                    <p><strong>Phone:</strong> @customer.PhoneNumber</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Address:</strong> @customer.Address</p>
+                                    <p><strong>City:</strong> @customer.City</p>
+                                    <p><strong>Country:</strong> @customer.Country</p>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <p>Customer ID: @booking.UserId</p>
+                            <p class="text-warning">Detailed customer information not available</p>
+                        }
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => showCustomerHistoryModal = true">
+                                <i class="bi bi-clock-history"></i> View Booking History
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary ms-2" @onclick="() => showContactCustomerModal = true">
+                                <i class="bi bi-envelope"></i> Contact Customer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Travel Packages -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Travel Packages</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (booking.TravelPackages != null && booking.TravelPackages.Any())
+                        {
+                            @foreach (var package in booking.TravelPackages)
+                            {
+                                <div class="card mb-3 package-item">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-3">
+                                            <h5 class="card-title mb-0">@package.Destination</h5>
+                                            <span class="badge bg-info">
+                                                @((package.EndDate - package.StartDate).Days) nights
+                                            </span>
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <p><strong>Dates:</strong> @package.StartDate.ToString("MMM d") - @package.EndDate.ToString("MMM d"), @package.StartDate.Year</p>
+
+                                                @if (package.Flight != null)
+                                                {
+                                                    <div class="mb-3">
+                                                        <h6>Flight Details</h6>
+                                                        <p class="mb-1">
+                                                            <i class="bi bi-airplane"></i>
+                                                            @package.Flight.Airline - @package.Flight.FlightNumber
+                                                        </p>
+                                                        <p class="mb-1">
+                                                            From: @package.Flight.DepartureAirport at
+                                                            @package.Flight.DepartureTime.ToString("h:mm tt, MMM d")
+                                                        </p>
+                                                        <p class="mb-1">
+                                                            To: @package.Flight.ArrivalAirport at
+                                                            @package.Flight.ArrivalTime.ToString("h:mm tt, MMM d")
+                                                        </p>
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="col-md-6">
+                                                @if (package.Hotel != null)
+                                                {
+                                                    <div class="mb-3">
+                                                        <h6>Hotel Details</h6>
+                                                        <p class="mb-1">
+                                                            <i class="bi bi-building"></i>
+                                                            @package.Hotel.HotelName
+                                                            <span class="hotel-stars">
+                                                                @(new string('★', package.Hotel.StarRating) + new string('☆', 5 - package.Hotel.StarRating))
+                                                            </span>
+                                                        </p>
+                                                        <p class="mb-1">
+                                                            @package.Hotel.Address, @package.Hotel.City, @package.Hotel.Country
+                                                        </p>
+                                                        <p class="mb-1">
+                                                            Room: @package.Hotel.RoomType
+                                                        </p>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        <p class="text-end mb-0"><strong>Package Price:</strong> $@package.Price.ToString("N2")</p>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <p>No travel packages found for this booking.</p>
+                        }
+                    </div>
+                </div>
+
+                <!-- Booking Notes -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Booking Notes</h5>
+                        <button class="btn btn-sm btn-primary" @onclick="() => showAddNoteModal = true">
+                            <i class="bi bi-plus-lg"></i> Add Note
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        @if (bookingNotes.Any())
+                        {
+                            <div class="list-group">
+                                @foreach (var note in bookingNotes.OrderByDescending(n => n.CreatedDate))
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between">
+                                            <strong>@note.CreatedBy</strong>
+                                            <small class="text-muted">@note.CreatedDate.ToString("MMM d, yyyy h:mm tt")</small>
+                                        </div>
+                                        <p class="mb-0 mt-2">@note.Content</p>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No notes have been added to this booking yet.</p>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <!-- Booking Summary -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Booking Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Sub-total:</span>
+                            <span>$@(CalculateSubtotal().ToString("N2"))</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Fees & Taxes:</span>
+                            <span>$@(CalculateTaxesAndFees().ToString("N2"))</span>
+                        </div>
+                        <hr />
+                        <div class="d-flex justify-content-between mb-2 fw-bold">
+                            <span>Total Price:</span>
+                            <span>$@booking.TotalPrice.ToString("N2")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Information -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Payment Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Payment Status:</strong> <span class="badge bg-success">Paid</span></p>
+                        <p><strong>Payment Method:</strong> Credit Card</p>
+                        <p><strong>Payment Date:</strong> @booking.BookingDate.AddHours(2).ToString("MMM d, yyyy h:mm tt")</p>
+                        <p><strong>Transaction ID:</strong> TX-@(123450000 + booking.Id)</p>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Actions</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-primary" @onclick="() => { }">
+                                <i class="bi bi-printer"></i> Print Booking Details
+                            </button>
+                            <button class="btn btn-outline-primary" @onclick="() => { }">
+                                <i class="bi bi-envelope"></i> Send Booking Confirmation
+                            </button>
+                            <button class="btn btn-outline-primary" @onclick="() => { }">
+                                <i class="bi bi-pencil"></i> Edit Booking
+                            </button>
+                            @if (booking.Status != "Cancelled")
+                            {
+                                <button class="btn btn-outline-danger" @onclick="() => showCancelModal = true">
+                                    <i class="bi bi-x-circle"></i> Cancel Booking
+                                </button>
+                            }
+                            <a href="/sales/bookings" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> Back to Bookings
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Edit Status Modal -->
+@if (showEditStatusModal)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Update Booking Status</h5>
+                    <button type="button" class="btn-close" @onclick="() => showEditStatusModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" @bind="newStatus">
+                            <option value="Confirmed">Confirmed</option>
+                            <option value="Pending">Pending</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reason for Change</label>
+                        <textarea class="form-control" rows="3" placeholder="Enter the reason for this status change" @bind="statusChangeReason"></textarea>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="notifyCustomerCheck" @bind="notifyCustomerOfStatusChange" />
+                        <label class="form-check-label" for="notifyCustomerCheck">
+                            Notify customer of status change
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showEditStatusModal = false">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="UpdateBookingStatus">Update Status</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+<!-- Notify Customer Modal -->
+@if (showNotifyCustomerModal)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Notify Customer</h5>
+                    <button type="button" class="btn-close" @onclick="() => showNotifyCustomerModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Notification Type</label>
+                        <select class="form-select" @bind="notificationType">
+                            <option value="email">Email</option>
+                            <option value="sms">SMS</option>
+                            <option value="both">Email & SMS</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Subject</label>
+                        <input type="text" class="form-control" placeholder="Notification subject" @bind="notificationSubject" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Message</label>
+                        <textarea class="form-control" rows="5" placeholder="Type your message here..." @bind="notificationMessage"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showNotifyCustomerModal = false">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="NotifyCustomer">Send Notification</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+<!-- Add Note Modal -->
+@if (showAddNoteModal)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Booking Note</h5>
+                    <button type="button" class="btn-close" @onclick="() => showAddNoteModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Note</label>
+                        <textarea class="form-control" rows="5" placeholder="Type your note here..." @bind="newNoteContent"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showAddNoteModal = false">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="AddNote">Add Note</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+<!-- Cancel Booking Modal -->
+@if (showCancelModal)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Cancel Booking</h5>
+                    <button type="button" class="btn-close" @onclick="() => showCancelModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <h6>Warning</h6>
+                        <p>Are you sure you want to cancel this booking? This action cannot be undone.</p>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cancellation Reason</label>
+                        <textarea class="form-control" rows="3" placeholder="Enter the reason for cancellation" @bind="cancellationReason"></textarea>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="refundCheck" @bind="issueRefund" />
+                        <label class="form-check-label" for="refundCheck">
+                            Issue refund to customer
+                        </label>
+                    </div>
+                    @if (issueRefund)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Refund Amount ($)</label>
+                            <input type="number" class="form-control" min="0" step="0.01" max="@booking.TotalPrice" @bind="refundAmount" />
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showCancelModal = false">Close</button>
+                    <button type="button" class="btn btn-danger" @onclick="CancelBooking">Cancel Booking</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+<!-- Customer History Modal -->
+@if (showCustomerHistoryModal)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Customer Booking History</h5>
+                    <button type="button" class="btn-close" @onclick="() => showCustomerHistoryModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Bookings for customer @(customer?.FirstName ?? "") @(customer?.LastName ?? "")</p>
+                    
+                    @if (customerBookings.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Booking ID</th>
+                                        <th>Destination</th>
+                                        <th>Booking Date</th>
+                                        <th>Price</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var historyBooking in customerBookings)
+                                    {
+                                        <tr class="@(historyBooking.Id == booking.Id ? "table-primary" : "")">
+                                            <td>@historyBooking.Id</td>
+                                            <td>@GetDestinationName(historyBooking)</td>
+                                            <td>@historyBooking.BookingDate.ToString("MM/dd/yyyy")</td>
+                                            <td>$@historyBooking.TotalPrice.ToString("N2")</td>
+                                            <td>
+                                                <span class="badge bg-@GetStatusColor(historyBooking.Status)">
+                                                    @historyBooking.Status
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <p>No booking history found for this customer.</p>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showCustomerHistoryModal = false">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+<!-- Contact Customer Modal -->
+@if (showContactCustomerModal)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Contact Customer</h5>
+                    <button type="button" class="btn-close" @onclick="() => showContactCustomerModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Contact Method</label>
+                        <select class="form-select" @bind="contactMethod">
+                            <option value="email">Email</option>
+                            <option value="phone">Phone</option>
+                            <option value="sms">SMS</option>
+                        </select>
+                    </div>
+                    
+                    @if (contactMethod == "email")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" value="@(customer?.Email ?? "")" disabled />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Subject</label>
+                            <input type="text" class="form-control" @bind="contactSubject" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Message</label>
+                            <textarea class="form-control" rows="5" @bind="contactMessage"></textarea>
+                        </div>
+                    }
+                    else if (contactMethod == "phone")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Phone Number</label>
+                            <input type="tel" class="form-control" value="@(customer?.PhoneNumber ?? "")" disabled />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Call Notes</label>
+                            <textarea class="form-control" rows="5" placeholder="Notes about what to discuss on the call" @bind="contactMessage"></textarea>
+                        </div>
+                    }
+                    else if (contactMethod == "sms")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Phone Number</label>
+                            <input type="tel" class="form-control" value="@(customer?.PhoneNumber ?? "")" disabled />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Message</label>
+                            <textarea class="form-control" rows="4" maxlength="160" @bind="contactMessage"></textarea>
+                            <small class="text-muted">Maximum 160 characters</small>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showContactCustomerModal = false">Cancel</button>
+                    @if (contactMethod == "email")
+                    {
+                        <button type="button" class="btn btn-primary" @onclick="ContactCustomer">Send Email</button>
+                    }
+                    else if (contactMethod == "phone")
+                    {
+                        <button type="button" class="btn btn-primary" @onclick="ContactCustomer">Log Call</button>
+                    }
+                    else if (contactMethod == "sms")
+                    {
+                        <button type="button" class="btn btn-primary" @onclick="ContactCustomer">Send SMS</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    [Parameter]
+    public int BookingId { get; set; }
+
+    private Booking booking;
+    private ApplicationUser customer;
+    private bool isLoading = true;
+    private string errorMessage;
+
+    // Modal controls
+    private bool showEditStatusModal = false;
+    private bool showNotifyCustomerModal = false;
+    private bool showAddNoteModal = false;
+    private bool showCancelModal = false;
+    private bool showCustomerHistoryModal = false;
+    private bool showContactCustomerModal = false;
+
+    // Status change
+    private string newStatus = "Confirmed";
+    private string statusChangeReason = "";
+    private bool notifyCustomerOfStatusChange = true;
+
+    // Notification
+    private string notificationType = "email";
+    private string notificationSubject = "";
+    private string notificationMessage = "";
+
+    // Notes
+    private string newNoteContent = "";
+    private List<BookingNote> bookingNotes = new List<BookingNote>();
+
+    // Cancel booking
+    private string cancellationReason = "";
+    private bool issueRefund = false;
+    private decimal refundAmount = 0;
+
+    // Customer history
+    private List<Booking> customerBookings = new List<Booking>();
+
+    // Contact customer
+    private string contactMethod = "email";
+    private string contactSubject = "";
+    private string contactMessage = "";
+
+    // Booking note class
+    private class BookingNote
+    {
+        public int Id { get; set; }
+        public int BookingId { get; set; }
+        public string Content { get; set; }
+        public string CreatedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            isLoading = true;
+
+            // Get the current user's name for adding notes
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var currentUser = await UserManager.GetUserAsync(authState.User);
+
+            // Load booking data
+            booking = await DbContext.Bookings
+                .Include(b => b.TravelPackages)
+                .ThenInclude(tp => tp.Flight)
+                .Include(b => b.TravelPackages)
+                .ThenInclude(tp => tp.Hotel)
+                .FirstOrDefaultAsync(b => b.Id == BookingId);
+
+            if (booking == null)
+            {
+                // If using real database but booking not found, show error
+                errorMessage = "Booking not found";
+                return;
+            }
+
+            // Try to load customer information
+            if (booking.UserId > 0)
+            {
+                // This is a simplified approach
+                // In a real app with Identity integration, you'd use the actual UserId from Identity
+                customer = await UserManager.FindByIdAsync(booking.UserId.ToString());
+            }
+
+            // Load customer booking history
+            customerBookings = await DbContext.Bookings
+                .Include(b => b.TravelPackages)
+                .Where(b => b.UserId == booking.UserId)
+                .ToListAsync();
+
+            // In a real app, you'd load booking notes from the database
+            // Here we'll create some mock data
+            bookingNotes = CreateMockBookingNotes(BookingId);
+
+            // Initialize refund amount
+            refundAmount = CalculateRefundAmount();
+
+            // Prepare notification
+            notificationSubject = $"Update on your booking to {GetDestinationName(booking)}";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading booking details: {ex.Message}";
+
+            // For demo, create mock data if database isn't available
+            booking = CreateMockBooking(BookingId);
+            customer = CreateMockCustomer(booking.UserId);
+            customerBookings = CreateMockCustomerBookings(booking.UserId);
+            bookingNotes = CreateMockBookingNotes(BookingId);
+            refundAmount = CalculateRefundAmount();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private string GetDestinationName(Booking booking)
+    {
+        if (booking?.TravelPackages == null || !booking.TravelPackages.Any())
+            return "Unknown Destination";
+
+        // If there are multiple destinations, list them
+        if (booking.TravelPackages.Count > 1)
+        {
+            return $"{booking.TravelPackages.First().Destination} + {booking.TravelPackages.Count - 1} more";
+        }
+
+        return booking.TravelPackages.First().Destination;
+    }
+
+    private string GetStatusColor(string status)
+    {
+        return status?.ToLower() switch
+        {
+            "confirmed" => "success",
+            "pending" => "warning",
+            "cancelled" => "danger",
+            _ => "secondary"
+        };
+    }
+
+    private decimal CalculateSubtotal()
+    {
+        if (booking?.TravelPackages == null)
+            return 0;
+
+        return booking.TravelPackages.Sum(p => p.Price);
+    }
+
+    private decimal CalculateTaxesAndFees()
+    {
+        // In a real application, you'd calculate actual taxes and fees
+        // For this demo, we'll assume taxes and fees are the difference between total and subtotal
+        var subtotal = CalculateSubtotal();
+        return booking?.TotalPrice - subtotal ?? 0;
+    }
+
+    private decimal CalculateRefundAmount()
+    {
+        // In a real application, you'd calculate the refund amount based on business rules
+        // For this demo, we'll refund 90% of the total price
+        return booking?.TotalPrice * 0.9m ?? 0;
+    }
+
+    private async Task UpdateBookingStatus()
+    {
+        if (booking != null && !string.IsNullOrEmpty(newStatus))
+        {
+            try
+            {
+                // Update status in database
+                booking.Status = newStatus;
+                await DbContext.SaveChangesAsync();
+
+                // Add a note about status change
+                AddStatusChangeNote();
+
+                // Notify customer if selected
+                if (notifyCustomerOfStatusChange)
+                {
+                    // In a real app, you'd send the notification here
+                }
+
+                // Close modal
+                showEditStatusModal = false;
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Error updating booking status: {ex.Message}";
+            }
+        }
+    }
+
+    private void AddStatusChangeNote()
+    {
+        string noteContent = $"Status changed to '{newStatus}'";
+        if (!string.IsNullOrEmpty(statusChangeReason))
+        {
+            noteContent += $". Reason: {statusChangeReason}";
+        }
+
+        bookingNotes.Add(new BookingNote
+            {
+                Id = bookingNotes.Count + 1,
+                BookingId = booking.Id,
+                Content = noteContent,
+                CreatedBy = "Sales Agent",
+                CreatedDate = DateTime.Now
+            });
+    }
+
+    private void NotifyCustomer()
+    {
+        // In a real app, you'd send the notification here
+
+        // Add a note about sending notification
+        bookingNotes.Add(new BookingNote
+            {
+                Id = bookingNotes.Count + 1,
+                BookingId = booking.Id,
+                Content = $"Customer notified via {notificationType}: {notificationSubject}",
+                CreatedBy = "Sales Agent",
+                CreatedDate = DateTime.Now
+            });
+
+        // Close modal
+        showNotifyCustomerModal = false;
+        StateHasChanged();
+    }
+
+    private void AddNote()
+    {
+        if (!string.IsNullOrWhiteSpace(newNoteContent))
+        {
+            bookingNotes.Add(new BookingNote
+                {
+                    Id = bookingNotes.Count + 1,
+                    BookingId = booking.Id,
+                    Content = newNoteContent,
+                    CreatedBy = "Sales Agent",
+                    CreatedDate = DateTime.Now
+                });
+
+            // Clear input and close modal
+            newNoteContent = "";
+            showAddNoteModal = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CancelBooking()
+    {
+        if (booking != null)
+        {
+            try
+            {
+                // Update status in database
+                booking.Status = "Cancelled";
+                await DbContext.SaveChangesAsync();
+
+                // Add a note about cancellation
+                bookingNotes.Add(new BookingNote
+                    {
+                        Id = bookingNotes.Count + 1,
+                        BookingId = booking.Id,
+                        Content = $"Booking cancelled. Reason: {cancellationReason}",
+                        CreatedBy = "Sales Agent",
+                        CreatedDate = DateTime.Now
+                    });
+
+                // Process refund if selected
+                if (issueRefund && refundAmount > 0)
+                {
+                    // In a real app, you'd process the refund here
+
+                    // Add a note about refund
+                    bookingNotes.Add(new BookingNote
+                        {
+                            Id = bookingNotes.Count + 1,
+                            BookingId = booking.Id,
+                            Content = $"Refund processed: ${refundAmount:N2}",
+                            CreatedBy = "Sales Agent",
+                            CreatedDate = DateTime.Now
+                        });
+                }
+
+                // Close modal
+                showCancelModal = false;
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Error cancelling booking: {ex.Message}";
+            }
+        }
+    }
+
+    private void ContactCustomer()
+    {
+        // In a real app, you'd send the email, SMS, or log the call here
+
+        // Add a note about contacting customer
+        string contactType = contactMethod switch
+        {
+            "email" => "Email",
+            "phone" => "Phone call",
+            "sms" => "SMS",
+            _ => "Contact"
+        };
+
+        bookingNotes.Add(new BookingNote
+            {
+                Id = bookingNotes.Count + 1,
+                BookingId = booking.Id,
+                Content = $"{contactType} to customer: {contactMessage}",
+                CreatedBy = "Sales Agent",
+                CreatedDate = DateTime.Now
+            });
+
+        // Close modal
+        showContactCustomerModal = false;
+        StateHasChanged();
+    }
+
+    // Methods to create mock data for demonstration
+    private Booking CreateMockBooking(int id)
+    {
+        return new Booking
+            {
+                Id = id,
+                UserId = 101,
+                BookingDate = DateTime.Now.AddDays(-14),
+                TotalPrice = 3299,
+                Status = "Confirmed",
+                TravelPackages = new List<TravelPackage>
+            {
+                new TravelPackage
+                {
+                    Id = 201,
+                    Destination = "Rome",
+                    Description = "Explore the beauty of Rome",
+                    StartDate = DateTime.Now.AddDays(30),
+                    EndDate = DateTime.Now.AddDays(37),
+                    Price = 2800,
+                    Flight = new FlightInfo
+                    {
+                        Id = 301,
+                        Airline = "Alitalia",
+                        FlightNumber = "AZ1234",
+                        DepartureAirport = "CPH",
+                        ArrivalAirport = "FCO",
+                        DepartureTime = DateTime.Now.AddDays(30).AddHours(10),
+                        ArrivalTime = DateTime.Now.AddDays(30).AddHours(12.5),
+                        Price = 850
+                    },
+                    Hotel = new HotelInfo
+                    {
+                        Id = 401,
+                        HotelName = "Hotel Roma",
+                        Address = "Via del Corso 123",
+                        City = "Rome",
+                        Country = "Italy",
+                        StarRating = 4,
+                        CheckInDate = DateTime.Now.AddDays(30),
+                        CheckOutDate = DateTime.Now.AddDays(37),
+                        RoomType = "Double Room",
+                        PricePerNight = 180
+                    }
+                }
+            }
+            };
+    }
+
+    private ApplicationUser CreateMockCustomer(int userId)
+    {
+        return new ApplicationUser
+            {
+                Id = userId.ToString(),
+                FirstName = "John",
+                LastName = "Smith",
+                Email = "john.smith@example.com",
+                PhoneNumber = "+45 12345678",
+                Address = "Hovedgaden 42",
+                City = "Copenhagen",
+                Country = "Denmark"
+            };
+    }
+
+    private List<Booking> CreateMockCustomerBookings(int userId)
+    {
+        return new List<Booking>
+        {
+            new Booking
+            {
+                Id = BookingId,
+                UserId = userId,
+                BookingDate = DateTime.Now.AddDays(-14),
+                Status = "Confirmed",
+                TotalPrice = 3299,
+                TravelPackages = new List<TravelPackage>
+                {
+                    new TravelPackage { Destination = "Rome" }
+                }
+            },
+            new Booking
+            {
+                Id = BookingId - 100,
+                UserId = userId,
+                BookingDate = DateTime.Now.AddDays(-120),
+                Status = "Completed",
+                TotalPrice = 2499,
+                TravelPackages = new List<TravelPackage>
+                {
+                    new TravelPackage { Destination = "Barcelona" }
+                }
+            },
+            new Booking
+            {
+                Id = BookingId - 200,
+                UserId = userId,
+                BookingDate = DateTime.Now.AddDays(-230),
+                Status = "Completed",
+                TotalPrice = 4850,
+                TravelPackages = new List<TravelPackage>
+                {
+                    new TravelPackage { Destination = "New York" }
+                }
+            }
+        };
+    }
+
+    private List<BookingNote> CreateMockBookingNotes(int bookingId)
+    {
+        return new List<BookingNote>
+        {
+            new BookingNote
+            {
+                Id = 1,
+                BookingId = bookingId,
+                Content = "Booking created through online system",
+                CreatedBy = "System",
+                CreatedDate = DateTime.Now.AddDays(-14)
+            },
+            new BookingNote
+            {
+                Id = 2,
+                BookingId = bookingId,
+                Content = "Customer called to confirm flight details",
+                CreatedBy = "Maria Jensen",
+                CreatedDate = DateTime.Now.AddDays(-10)
+            },
+            new BookingNote
+            {
+                Id = 3,
+                BookingId = bookingId,
+                Content = "Sent confirmation email with itinerary",
+                CreatedBy = "Peter Hansen",
+                CreatedDate = DateTime.Now.AddDays(-9)
+            }
+        };
+    }
+}

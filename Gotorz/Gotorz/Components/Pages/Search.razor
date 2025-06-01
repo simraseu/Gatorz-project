@@ -1,0 +1,276 @@
+﻿@page "/search"
+@using Gotorz.Models
+@using Gotorz.Services
+@inject ITravelPackageService TravelPackageService
+@inject NavigationManager NavigationManager
+@inject ILogger<Search> Logger
+@rendermode InteractiveServer
+
+<PageTitle>Search for Travel - Gotorz</PageTitle>
+
+<div class="container py-4">
+    <div class="search-container">
+        <h2>Find your perfect trip</h2>
+        <p class="lead mb-4">Search among our many travel package offers with flight and hotel</p>
+
+        <div class="search-form p-4 bg-white rounded shadow-sm">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group mb-3">
+                        <label for="origin" class="form-label">From:</label>
+                        <input id="origin" class="form-control" @bind="Origin" placeholder="Airport code (e.g., CPH, JFK, LHR)" />
+                        <small class="text-muted">Enter airport code like CPH for Copenhagen, BCN for Barcelona</small>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group mb-3">
+                        <label for="destination" class="form-label">To:</label>
+                        <input id="destination" class="form-control" @bind="Destination" placeholder="Airport code (e.g., BCN, CDG, FCO)" />
+                        <small class="text-muted">Enter airport code like BCN for Barcelona, FCO for Rome</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group mb-3">
+                        <label for="departureDate" class="form-label">Departure date:</label>
+                        <input id="departureDate" type="date" class="form-control" @bind="DepartureDate" min="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group mb-3">
+                        <label for="returnDate" class="form-label">Return date:</label>
+                        <input id="returnDate" type="date" class="form-control" @bind="ReturnDate" min="@DepartureDate.AddDays(1).ToString("yyyy-MM-dd")" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <button class="btn btn-primary w-100" @onclick="SearchTravelPackages" disabled="@IsLoading">
+                        @if (IsLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>Searching...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-search"></i>
+                            <span>Search</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Common Airport Codes Help -->
+        <div class="mt-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Common Airport Codes</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row small">
+                        <div class="col-md-3">
+                            <strong>Europe:</strong>
+                            <ul class="list-unstyled">
+                                <li>CPH - Copenhagen</li>
+                                <li>BCN - Barcelona</li>
+                                <li>FCO - Rome</li>
+                                <li>CDG - Paris</li>
+                                <li>LHR - London</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>More Europe:</strong>
+                            <ul class="list-unstyled">
+                                <li>AMS - Amsterdam</li>
+                                <li>FRA - Frankfurt</li>
+                                <li>MAD - Madrid</li>
+                                <li>MUC - Munich</li>
+                                <li>VIE - Vienna</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Americas:</strong>
+                            <ul class="list-unstyled">
+                                <li>JFK - New York</li>
+                                <li>LAX - Los Angeles</li>
+                                <li>ORD - Chicago</li>
+                                <li>MIA - Miami</li>
+                                <li>YYZ - Toronto</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Asia/Middle East:</strong>
+                            <ul class="list-unstyled">
+                                <li>DXB - Dubai</li>
+                                <li>HND - Tokyo</li>
+                                <li>SIN - Singapore</li>
+                                <li>BKK - Bangkok</li>
+                                <li>HKG - Hong Kong</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (ErrorMessage != null)
+    {
+        <div class="alert alert-danger mt-4">
+            <h4>Error Searching</h4>
+            <p>@ErrorMessage</p>
+        </div>
+    }
+    else if (hasSearched && !TravelPackages.Any())
+    {
+        <div class="alert alert-info mt-4">
+            <h4>No travel packages found</h4>
+            <p>We couldn't find any travel packages matching your criteria. This could be due to:</p>
+            <ul>
+                <li>No available flights or hotels for the selected dates</li>
+                <li>Invalid airport codes</li>
+                <li>The destination not being supported</li>
+            </ul>
+            <p>Please try:</p>
+            <ul>
+                <li>Using different dates</li>
+                <li>Checking the airport codes (see the help section above)</li>
+                <li>Trying a different destination</li>
+            </ul>
+        </div>
+    }
+
+    @if (TravelPackages.Any())
+    {
+        <h3 class="mt-5 mb-4">Available travel packages (@TravelPackages.Count results)</h3>
+        <div class="row">
+            @foreach (var package in TravelPackages)
+            {
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card h-100 package-card">
+                        <div class="card-body">
+                            <h5 class="card-title">@package.OriginCity to @package.Destination</h5>
+                            <div class="mb-2">
+                                <span class="text-muted">@package.StartDate.ToString("MMM d") - @package.EndDate.ToString("MMM d")</span>
+                                <span class="ms-2 badge bg-info">@package.GetDuration()</span>
+                            </div>
+                            <p class="card-text mb-1">
+                                <i class="bi bi-airplane"></i> @package.Airline
+                            </p>
+                            <p class="card-text mb-1">
+                                <i class="bi bi-building"></i> @package.HotelName
+                                <span class="hotel-stars">@package.GetStars()</span>
+                            </p>
+                            <p class="card-text small text-muted">
+                                @package.Description
+                            </p>
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div class="package-price-display">
+                                    <span class="price-label">Total price</span>
+                                    <span class="price-value">$@package.GetFormattedPrice()</span>
+                                </div>
+                                <a href="/package/@package.Id" class="btn btn-primary">View details</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private string Origin { get; set; } = string.Empty;
+    private string Destination { get; set; } = string.Empty;
+    private DateTime DepartureDate { get; set; } = DateTime.Now.AddDays(7);
+    private DateTime ReturnDate { get; set; } = DateTime.Now.AddDays(14);
+    private bool IsLoading { get; set; } = false;
+    private bool hasSearched { get; set; } = false;
+    private string ErrorMessage { get; set; } = null;
+    private List<TravelPackageViewModel> TravelPackages { get; set; } = new();
+
+    protected override void OnInitialized()
+    {
+        // Pre-fill with popular destinations from URL parameters, if available
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        if (Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query).TryGetValue("destination", out var destinationValue))
+        {
+            Destination = destinationValue.ToString();
+        }
+
+        Logger.LogInformation("Search page initialized");
+    }
+
+    private async Task SearchTravelPackages()
+    {
+        Logger.LogInformation("Search button clicked");
+
+        // Clear any previous error
+        ErrorMessage = null;
+
+        // Validate input
+        if (string.IsNullOrWhiteSpace(Origin))
+        {
+            ErrorMessage = "Please enter a departure airport code (e.g., CPH for Copenhagen)";
+            Logger.LogWarning("Error: Origin is empty");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Destination))
+        {
+            ErrorMessage = "Please enter a destination airport code (e.g., BCN for Barcelona)";
+            Logger.LogWarning("Error: Destination is empty");
+            return;
+        }
+
+        if (DepartureDate < DateTime.Now.Date)
+        {
+            ErrorMessage = "Departure date cannot be in the past";
+            Logger.LogWarning("Error: Departure date is in the past");
+            return;
+        }
+
+        if (ReturnDate <= DepartureDate)
+        {
+            ErrorMessage = "Return date must be after departure date";
+            Logger.LogWarning("Error: Return date is not after departure date");
+            return;
+        }
+
+        try
+        {
+            IsLoading = true;
+            StateHasChanged(); // Update UI to show loading indicator
+
+            Logger.LogInformation($"Searching for packages: Origin={Origin}, Destination={Destination}, Departure={DepartureDate:yyyy-MM-dd}, Return={ReturnDate:yyyy-MM-dd}");
+
+            // Search for travel packages
+            TravelPackages = await TravelPackageService.SearchPackagesAsync(
+                Origin.Trim().ToUpper(),
+                Destination.Trim().ToUpper(),
+                DepartureDate,
+                ReturnDate);
+
+            Logger.LogInformation($"Search completed. Found {TravelPackages.Count} packages");
+
+            // Mark that we've performed a search
+            hasSearched = true;
+        }
+        catch (Exception ex)
+        {
+            // Handle exceptions
+            ErrorMessage = $"An error occurred while searching. Please try again later.";
+            Logger.LogError($"Error during search: {ex.Message}");
+            Logger.LogError($"Stack trace: {ex.StackTrace}");
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged(); // Update UI with results or error
+        }
+    }
+}

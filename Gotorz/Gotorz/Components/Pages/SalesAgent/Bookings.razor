@@ -1,0 +1,440 @@
+﻿@page "/sales/bookings"
+@using Microsoft.AspNetCore.Authorization
+@using Gotorz.Data
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize(Roles = "SalesAgent,Admin")]
+@inject ApplicationDbContext DbContext
+@inject NavigationManager NavigationManager
+
+<PageTitle>Manage Bookings - Gotorz</PageTitle>
+
+<div class="container-fluid py-4">
+    <h1>Booking Management</h1>
+    <p class="lead">View and manage customer travel bookings</p>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="input-group">
+                <input type="text" class="form-control" placeholder="Search by booking ID, customer name, or destination" 
+                       @bind="searchTerm" @bind:event="oninput" />
+                <button class="btn btn-primary" type="button" @onclick="ApplyFilters">
+                    <i class="bi bi-search"></i> Search
+                </button>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" @bind="statusFilter">
+                <option value="">All Statuses</option>
+                <option value="Confirmed">Confirmed</option>
+                <option value="Pending">Pending</option>
+                <option value="Cancelled">Cancelled</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" @bind="dateFilter">
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+            </select>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center my-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger">
+            <h4>Error Loading Bookings</h4>
+            <p>@errorMessage</p>
+        </div>
+    }
+    else if (bookings == null || !bookings.Any())
+    {
+        <div class="alert alert-info">
+            <h4>No Bookings Found</h4>
+            <p>There are no bookings matching your criteria.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Booking ID</th>
+                        <th>Customer</th>
+                        <th>Destination</th>
+                        <th>Booking Date</th>
+                        <th>Travel Dates</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var booking in bookings)
+                    {
+                        <tr>
+                            <td>@booking.Id</td>
+                            <td>Customer ID: @booking.UserId</td>
+                            <td>@GetDestinationName(booking)</td>
+                            <td>@booking.BookingDate.ToString("MM/dd/yyyy")</td>
+                            <td>@GetTravelDates(booking)</td>
+                            <td>$@booking.TotalPrice.ToString("N2")</td>
+                            <td>
+                                <span class="badge bg-@GetStatusColor(booking.Status)">@booking.Status</span>
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="/sales/booking/@booking.Id" class="btn btn-sm btn-primary">View</a>
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowStatusModal(booking)">Status</button>
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowNotificationModal(booking)">Notify</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <nav aria-label="Booking navigation">
+            <ul class="pagination justify-content-center">
+                @for (int i = 1; i <= totalPages; i++)
+                {
+                    var pageNumber = i;
+                    <li class="page-item @(currentPage == pageNumber ? "active" : "")">
+                        <button class="page-link" @onclick="() => ChangePage(pageNumber)">@pageNumber</button>
+                    </li>
+                }
+            </ul>
+        </nav>
+    }
+</div>
+
+@if (selectedBooking != null && showStatusModal)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Update Booking Status</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Update status for Booking #@selectedBooking.Id - @GetDestinationName(selectedBooking)</p>
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" @bind="newStatus">
+                            <option value="Confirmed">Confirmed</option>
+                            <option value="Pending">Pending</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Comment</label>
+                        <textarea class="form-control" rows="3" placeholder="Add a comment about this status change (optional)"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="UpdateBookingStatus">Update Status</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@if (selectedBooking != null && showNotificationModal)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Send Customer Notification</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Send notification to customer for Booking #@selectedBooking.Id - @GetDestinationName(selectedBooking)</p>
+                    <div class="mb-3">
+                        <label class="form-label">Notification Type</label>
+                        <select class="form-select" @bind="notificationType">
+                            <option value="email">Email</option>
+                            <option value="sms">SMS</option>
+                            <option value="both">Email & SMS</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Subject</label>
+                        <input type="text" class="form-control" placeholder="Notification subject" @bind="notificationSubject" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Message</label>
+                        <textarea class="form-control" rows="5" placeholder="Type your message here..." @bind="notificationMessage"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SendNotification">Send Notification</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    private List<Booking> allBookings = new List<Booking>();
+    private List<Booking> bookings = new List<Booking>();
+    private bool isLoading = true;
+    private string errorMessage;
+    
+    // Search and filter
+    private string searchTerm = "";
+    private string statusFilter = "";
+    private string dateFilter = "all";
+    
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+    
+    // Modals
+    private Booking selectedBooking;
+    private bool showStatusModal = false;
+    private bool showNotificationModal = false;
+    private string newStatus = "Confirmed";
+    private string notificationType = "email";
+    private string notificationSubject = "";
+    private string notificationMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            isLoading = true;
+            
+            // Load all bookings from the database
+            allBookings = await DbContext.Bookings
+                .Include(b => b.TravelPackages)
+                .OrderByDescending(b => b.BookingDate)
+                .ToListAsync();
+                
+            // Apply initial filtering
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading bookings: {ex.Message}";
+            
+            // For demo purposes, create mock bookings if database fails
+            allBookings = CreateMockBookings();
+            ApplyFilters();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+    
+    private void ApplyFilters()
+    {
+        var filteredBookings = allBookings;
+        
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filteredBookings = filteredBookings.Where(b => 
+                b.Id.ToString().Contains(searchTerm) || 
+                GetDestinationName(b).Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                b.UserId.ToString().Contains(searchTerm)
+            ).ToList();
+        }
+        
+        // Apply status filter
+        if (!string.IsNullOrWhiteSpace(statusFilter))
+        {
+            filteredBookings = filteredBookings.Where(b => b.Status == statusFilter).ToList();
+        }
+        
+        // Apply date filter
+        if (dateFilter != "all")
+        {
+            DateTime cutoffDate = DateTime.Now;
+            
+            switch (dateFilter)
+            {
+                case "today":
+                    cutoffDate = DateTime.Today;
+                    break;           
+                    case "week":
+                    cutoffDate = DateTime.Now.AddDays(-7);
+                    break;
+                case "month":
+                    cutoffDate = DateTime.Now.AddDays(-30);
+                    break;
+            }
+
+            filteredBookings = filteredBookings.Where(b => b.BookingDate >= cutoffDate).ToList();
+        }
+
+        // Calculate total pages
+        totalPages = (int)Math.Ceiling(filteredBookings.Count / (double)pageSize);
+
+        // Get current page
+        bookings = filteredBookings
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+
+        // Reset to first page if no results on current page
+        if (bookings.Count == 0 && totalPages > 0)
+        {
+            currentPage = 1;
+            bookings = filteredBookings
+                .Take(pageSize)
+                .ToList();
+        }
+    }
+
+    private void ChangePage(int page)
+    {
+        currentPage = page;
+        ApplyFilters();
+    }
+
+    private string GetDestinationName(Booking booking)
+    {
+        if (booking?.TravelPackages == null || !booking.TravelPackages.Any())
+            return "Unknown Destination";
+
+        // If there are multiple destinations, list them
+        if (booking.TravelPackages.Count > 1)
+        {
+            return $"{booking.TravelPackages.First().Destination} + {booking.TravelPackages.Count - 1} more";
+        }
+
+        return booking.TravelPackages.First().Destination;
+    }
+
+    private string GetTravelDates(Booking booking)
+    {
+        if (booking?.TravelPackages == null || !booking.TravelPackages.Any())
+            return "N/A";
+
+        var package = booking.TravelPackages.First();
+        return $"{package.StartDate:MM/dd/yyyy} - {package.EndDate:MM/dd/yyyy}";
+    }
+
+    private string GetStatusColor(string status)
+    {
+        return status?.ToLower() switch
+        {
+            "confirmed" => "success",
+            "pending" => "warning",
+            "cancelled" => "danger",
+            _ => "secondary"
+        };
+    }
+
+    private void ShowStatusModal(Booking booking)
+    {
+        selectedBooking = booking;
+        newStatus = booking.Status;
+        showStatusModal = true;
+        showNotificationModal = false;
+    }
+
+    private void ShowNotificationModal(Booking booking)
+    {
+        selectedBooking = booking;
+        notificationSubject = $"Information about your booking to {GetDestinationName(booking)}";
+        notificationType = "email";
+        notificationMessage = "";
+        showNotificationModal = true;
+        showStatusModal = false;
+    }
+
+    private void CloseModals()
+    {
+        showStatusModal = false;
+        showNotificationModal = false;
+        selectedBooking = null;
+    }
+
+    private async Task UpdateBookingStatus()
+    {
+        if (selectedBooking != null && !string.IsNullOrEmpty(newStatus))
+        {
+            try
+            {
+                // Update status in database
+                selectedBooking.Status = newStatus;
+                await DbContext.SaveChangesAsync();
+
+                // Close modal and refresh list
+                CloseModals();
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Error updating booking status: {ex.Message}";
+            }
+        }
+    }
+
+    private void SendNotification()
+    {
+        // In a real application, this would connect to an email/SMS service
+        // For demo purposes, we'll just close the modal as if it was sent
+        CloseModals();
+    }
+
+    // Method to create mock bookings for preview when database is not available
+    private List<Booking> CreateMockBookings()
+    {
+        var mockBookings = new List<Booking>();
+        var random = new Random();
+        string[] destinations = { "Barcelona", "Rome", "Dubai", "Paris", "London", "New York", "Tokyo" };
+        string[] statuses = { "Confirmed", "Pending", "Cancelled" };
+
+        // Create 30 mock bookings
+        for (int i = 1; i <= 30; i++)
+        {
+            var destination = destinations[random.Next(destinations.Length)];
+            var status = statuses[random.Next(statuses.Length)];
+            var bookingDate = DateTime.Now.AddDays(-random.Next(1, 30));
+            var startDate = bookingDate.AddDays(random.Next(10, 60));
+            var endDate = startDate.AddDays(random.Next(3, 14));
+            var price = random.Next(1000, 5000);
+
+            mockBookings.Add(new Booking
+                {
+                    Id = 1000 + i,
+                    UserId = 100 + i,
+                    BookingDate = bookingDate,
+                    TotalPrice = price,
+                    Status = status,
+                    TravelPackages = new List<TravelPackage>
+                {
+                    new TravelPackage
+                    {
+                        Destination = destination,
+                        StartDate = startDate,
+                        EndDate = endDate,
+                        Price = price * 0.85m  // Package price is 85% of total (just for demo)
+                    }
+                }
+                });
+        }
+
+        return mockBookings;
+    }
+}

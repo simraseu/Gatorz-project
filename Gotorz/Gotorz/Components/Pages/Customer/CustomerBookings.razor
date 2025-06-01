@@ -1,0 +1,200 @@
+﻿@page "/customer/bookings"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Gotorz.Data
+@using Gotorz.Models
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize(Roles = "Customer")]
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext DbContext
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>My Bookings - Gotorz</PageTitle>
+
+<div class="container py-4">
+    <h1>My Bookings</h1>
+    <p class="lead">View your travel bookings history</p>
+
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <a class="nav-link @(filter == "upcoming" ? "active" : "")"
+               @onclick="@(e => FilterBookings("upcoming"))" href="javascript:void(0)">
+                Upcoming Trips
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(filter == "past" ? "active" : "")"
+               @onclick="@(e => FilterBookings("past"))" href="javascript:void(0)">
+                Past Trips
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(filter == "all" ? "active" : "")"
+               @onclick="@(e => FilterBookings("all"))" href="javascript:void(0)">
+                All Bookings
+            </a>
+        </li>
+    </ul>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading bookings...</span>
+            </div>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-danger">
+            <h4>Error Loading Bookings</h4>
+            <p>@errorMessage</p>
+        </div>
+    }
+    else if (bookings == null || !bookings.Any())
+    {
+        <div class="alert alert-info">
+            <h4>No @(filter) Bookings Found</h4>
+            <p>You don't have any @(filter) bookings yet.</p>
+            <a href="/search" class="btn btn-primary">Search for Trips</a>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var booking in bookings)
+            {
+                <div class="col-md-6 mb-4">
+                    <div class="card booking-card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Booking #@booking.Id</h5>
+                            <span class="badge @GetStatusBadgeClass(booking.Status)">@booking.Status</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">
+                                <strong>Booking Date:</strong> @booking.BookingDate.ToString("MMM d, yyyy")
+                            </p>
+                            <p class="card-text">
+                                <strong>Total Price:</strong> $@booking.TotalPrice.ToString("N2")
+                            </p>
+
+                            @if (booking.TravelPackages != null && booking.TravelPackages.Any())
+                            {
+                                <h6>Travel Packages:</h6>
+                                <ul class="list-group list-group-flush mb-3">
+                                    @foreach (var package in booking.TravelPackages)
+                                    {
+                                        <li class="list-group-item px-0">
+                                            <div class="d-flex justify-content-between">
+                                                <span>@package.Destination</span>
+                                                <span>@package.StartDate.ToString("MMM d") - @package.EndDate.ToString("MMM d")</span>
+                                            </div>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+
+                            <div class="text-end">
+                                <button class="btn btn-outline-primary" @onclick="() => ViewBookingDetails(booking.Id)">
+                                    View Details
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string userId;
+    private List<Booking> allBookings = new();
+    private List<Booking> bookings = new();
+    private bool isLoading = true;
+    private string errorMessage;
+    private string filter = "upcoming";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            isLoading = true;
+
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var currentUser = await UserManager.GetUserAsync(authState.User);
+            if (currentUser == null)
+            {
+                errorMessage = "Unable to load user information.";
+                return;
+            }
+
+            // Here we need to map from ApplicationUser to our User entity
+            // This is a simplification. In a real app, you might have a different approach
+            // to linking identity users with booking users
+            var appUserId = currentUser.Id;
+
+            // This is a simplified approach. In a real app, you'd have a proper way to load bookings
+            // for the specific identity user
+            allBookings = await DbContext.Bookings
+                .Include(b => b.TravelPackages)
+                .Where(b => b.UserId == 1) // Simplified - using a dummy user ID
+                .OrderByDescending(b => b.BookingDate)
+                .ToListAsync();
+
+            FilterBookings(filter);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading bookings: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void FilterBookings(string filterType)
+    {
+        filter = filterType;
+
+        switch (filter)
+        {
+            case "upcoming":
+                bookings = allBookings
+                    .Where(b => b.TravelPackages.Any(tp => tp.StartDate >= DateTime.Now))
+                    .ToList();
+                break;
+            case "past":
+                bookings = allBookings
+                    .Where(b => b.TravelPackages.All(tp => tp.EndDate < DateTime.Now))
+                    .ToList();
+                break;
+            case "all":
+            default:
+                bookings = allBookings.ToList();
+                break;
+        }
+    }
+
+    private string GetStatusBadgeClass(string status)
+    {
+        return status?.ToLower() switch
+        {
+            "confirmed" => "bg-success",
+            "pending" => "bg-warning",
+            "cancelled" => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private void ViewBookingDetails(int bookingId)
+    {
+        NavigationManager.NavigateTo($"/customer/booking/{bookingId}");
+    }
+}

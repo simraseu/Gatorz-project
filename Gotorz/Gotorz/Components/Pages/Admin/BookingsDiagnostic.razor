@@ -1,0 +1,158 @@
+@page "/admin/bookings-diagnostic"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using System.Reflection
+@attribute [Authorize(Roles = "Admin")]
+@inject Gotorz.Data.ApplicationDbContext DbContext
+
+<PageTitle>Booking Diagnostic - Gotorz</PageTitle>
+
+<h1>Booking Diagnostic</h1>
+<p>This page helps diagnose the structure of your Booking class</p>
+
+@if (isLoading)
+{
+    <p>Loading...</p>
+}
+else if (error != null)
+{
+    <div class="alert alert-danger">
+        <h4>Error Loading Bookings</h4>
+        <p>@error</p>
+    </div>
+}
+else if (bookingCount == 0)
+{
+    <div class="alert alert-info">
+        <h4>No Bookings Found</h4>
+        <p>There are no bookings in the database to analyze.</p>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5>Booking Class Properties</h5>
+        </div>
+        <div class="card-body">
+            <ul>
+                @foreach (var prop in bookingProperties)
+                {
+                    <li>
+                        <strong>@prop.Name</strong> (@prop.PropertyType.Name)
+                    </li>
+                }
+            </ul>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5>Found @bookingCount booking(s) in the database</h5>
+        </div>
+        <div class="card-body">
+            <h6>Booking Class Properties:</h6>
+            <ul>
+                @foreach (var prop in bookingProperties)
+                {
+                    <li>
+                        <strong>@prop.Name</strong> (@prop.PropertyType.Name)
+                    </li>
+                }
+            </ul>
+        </div>
+    </div>
+
+    <h4>First Booking Properties:</h4>
+    <div class="table-responsive">
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Property</th>
+                    <th>Type</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var prop in bookingProperties)
+                {
+                    <tr>
+                        <td>@prop.Name</td>
+                        <td>@prop.PropertyType.Name</td>
+                        <td>
+                            @try
+                            {
+                                var value = prop.GetValue(firstBooking);
+                                if (value == null)
+                                {
+                                    <span class="text-muted">null</span>
+                                }
+                                else if (IsSimpleType(prop.PropertyType))
+                                {
+                                    @value.ToString()
+                                }
+                                else
+                                {
+                                    <span class="text-info">Complex type</span>
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                <span class="text-danger">Error: @ex.Message</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private string error;
+    private int bookingCount;
+    private PropertyInfo[] bookingProperties;
+    private object firstBooking;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            isLoading = true;
+
+            // Get the Booking type properties
+            Type bookingType = typeof(Booking);
+            bookingProperties = bookingType.GetProperties();
+
+            // Get booking count
+            bookingCount = await DbContext.Bookings.CountAsync();
+
+            if (bookingCount > 0)
+            {
+                // Get the first booking for inspection
+                firstBooking = await DbContext.Bookings.FirstAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            error = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private bool IsSimpleType(Type type)
+    {
+        return type.IsPrimitive
+            || type.IsEnum
+            || type == typeof(string)
+            || type == typeof(decimal)
+            || type == typeof(DateTime)
+            || type == typeof(DateTimeOffset)
+            || type == typeof(TimeSpan)
+            || type == typeof(Guid);
+    }
+}

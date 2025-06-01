@@ -1,0 +1,167 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using Gotorz.Models
+@using System.Collections.Generic
+@inject NavigationManager NavigationManager
+
+<PageTitle>Gotorz - Discover the world with Gotorz</PageTitle>
+
+<div class="hero-container">
+    <div class="hero-content">
+        <h1 class="hero-title">Discover the world with Gotorz</h1>
+        <p class="hero-subtitle">Complete travel packages at the best prices</p>
+        <a href="/search" class="btn btn-primary btn-lg mt-4">Find your journey now</a>
+    </div>
+</div>
+
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="bi bi-globe"></i>
+                </div>
+                <h3>Popular Destinations</h3>
+                <p>Explore our carefully selected destinations with fantastic experiences and competitive prices.</p>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="bi bi-star"></i>
+                </div>
+                <h3>All-in-one Package</h3>
+                <p>Flight and hotel combined in one comprehensive package - We handle all the details so you can focus on the experience.</p>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="bi bi-piggy-bank"></i>
+                </div>
+                <h3>Price Guarantee</h3>
+                <p>We offer budget-friendly travel without compromising on quality and your experience.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container mt-5 mb-5">
+    <h2 class="text-center mb-4">Popular Destinations</h2>
+    <div class="row">
+        @foreach (var destination in popularDestinations)
+        {
+            <div class="col-md-4 mb-4">
+                <div class="card destination-card">
+                    <div class="destination-img" style="background-image: url('@destination.ImageUrl')">
+                        <div class="destination-overlay">
+                            <span class="price-tag">From $@destination.Price</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">@destination.Name</h5>
+                        <p class="card-text">@destination.Description</p>
+                        <a href="/search?destination=@destination.Name" class="btn btn-outline-primary">See offers</a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="testimonial-section">
+    <div class="container">
+        <h2 class="text-center text-white mb-5">What Our Customers Say</h2>
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="testimonial-card">
+                    <div class="testimonial-rating">
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                    </div>
+                    <p class="testimonial-text">"Fantastic service and incredibly easy bookings. I will definitely use Gotorz again!"</p>
+                    <p class="testimonial-author">- Maria P.</p>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="testimonial-card">
+                    <div class="testimonial-rating">
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                    </div>
+                    <p class="testimonial-text">"The prices are really competitive, and the package solution makes everything so much easier. Thanks for a wonderful vacation!"</p>
+                    <p class="testimonial-author">- Andrew K.</p>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="testimonial-card">
+                    <div class="testimonial-rating">
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-half"></i>
+                    </div>
+                    <p class="testimonial-text">"Top-class customer service and good prices. My family and I really enjoyed our vacation to Barcelona!"</p>
+                    <p class="testimonial-author">- Samuel M.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container mt-5 mb-5 text-center">
+    <h2 class="mb-4">Ready to explore the world?</h2>
+    <p class="lead mb-4">Sign up for our newsletter and get exclusive offers and inspiration for your next journey.</p>
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="input-group mb-3">
+                <input type="email" class="form-control" placeholder="Your email address" aria-label="Email">
+                <button class="btn btn-primary" type="button">Subscribe</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Mock data for popular destinations
+    private List<DestinationModel> popularDestinations = new List<DestinationModel>
+    {
+        new DestinationModel
+        {
+            Name = "Barcelona",
+            Description = "Experience the Catalan capital with amazing architecture and beach life.",
+            Price = 2499,
+            ImageUrl = "/images/barcelona.jpg"
+        },
+        new DestinationModel
+        {
+            Name = "Rome",
+            Description = "Explore the eternal city with historical sights and exquisite food.",
+            Price = 2899,
+            ImageUrl = "/images/rome.jpg"
+        },
+        new DestinationModel
+        {
+            Name = "Dubai",
+            Description = "Luxury in the desert with impressive skyscrapers and exclusive shopping.",
+            Price = 3999,
+            ImageUrl = "/images/dubai.jpg"
+        }
+    };
+
+    // Model class for destinations
+    private class DestinationModel
+    {
+        public string Name { get; set; }
+        public string Description { get; set; }
+        public decimal Price { get; set; }
+        public string ImageUrl { get; set; }
+    }
+}
