@@ -4,7 +4,6 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Web
-@rendermode InteractiveServer
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -109,13 +108,10 @@
                 <form action="Account/CustomLogout" method="post">
                     <AntiforgeryToken />
                     <input type="hidden" name="returnUrl" value="" />
-<<<<<<< HEAD
-                    <button type="submit" class="nav-link">Logout</button>
-=======
+
                     <button type="submit" class="nav-link" style="border:none; background:none; width:100%; text-align:left;">
                         <i class="bi bi-box-arrow-left"></i> Logout
                     </button>
->>>>>>> cf46350 (Add submenu navigation for Admin, Sales and Customer roles)
                 </form>
             </div>
         }
