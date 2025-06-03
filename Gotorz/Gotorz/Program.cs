@@ -113,7 +113,7 @@ using (var scope = app.Services.CreateScope())
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-    // Apply migrations
+    // Apply migrations - THIS WORKS FOR BOTH LOCAL AND AZURE
     dbContext.Database.Migrate();
 
     // Create roles if they don't exist
