@@ -170,12 +170,13 @@ namespace Gotorz.Services
 
         private decimal ParseDecimal(string decimalString)
         {
-            if (decimal.TryParse(decimalString, out var result))
+            if (decimal.TryParse(decimalString, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var result))
             {
                 return result;
             }
             return 0;
         }
+
 
         public Task<FlightInfo> GetFlightDetailAsync(string flightId)
         {

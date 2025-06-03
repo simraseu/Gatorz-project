@@ -283,12 +283,13 @@ namespace Gotorz.Services
             if (string.IsNullOrEmpty(decimalString))
                 return null;
 
-            if (decimal.TryParse(decimalString, out var result))
+            if (decimal.TryParse(decimalString, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var result))
             {
                 return result;
             }
             return null;
         }
+
 
         public Task<HotelInfo> GetHotelDetailAsync(string hotelId)
         {
