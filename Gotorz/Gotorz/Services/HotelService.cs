@@ -326,6 +326,7 @@ namespace Gotorz.Services
 
       
 
+
         public Task<HotelInfo> GetHotelDetailAsync(string hotelId)
         {
             // This method is not implemented in the current code
