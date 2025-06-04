@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
+using Microsoft.AspNetCore.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -71,11 +72,59 @@ builder.Services.AddScoped<ITravelPackageService, TravelPackageService>();
 builder.Services.AddScoped<IActivityLogService, ActivityLogService>();
 builder.Services.AddScoped<IBookingService, BookingService>();
 
-// Add SignalR
-builder.Services.AddSignalR();
+// Add SignalR with detailed errors
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = true;
+});
 
-// Add HttpContextAccessor
+// --- Add this configuration after builder.Services.AddSignalR() in your Program.cs ---
+
+// Configure authentication for SignalR
+builder.Services.Configure<CookiePolicyOptions>(options =>
+{
+    options.CheckConsentNeeded = context => false;
+    options.MinimumSameSitePolicy = SameSiteMode.None;
+});
+
+// Add CORS if needed for SignalR
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("SignalRPolicy", builder =>
+    {
+        builder
+            .WithOrigins("https://localhost:7000", "https://localhost:5000") 
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
+    });
+});
+
+
+// Configure SignalR authorization
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("CustomerOnly", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireRole("Customer");
+    });
+});
+
+// -------------------------------------------------------------------------------
+
 builder.Services.AddHttpContextAccessor();
+
+// --- **IMPORTANT**: Add Razor Pages and Controllers services for antiforgery support ---
+builder.Services.AddRazorPages();
+builder.Services.AddControllers();
+
+// Configure cookie policy to allow cross-site cookies for SignalR
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Cookie.SameSite = SameSiteMode.None;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+});
 
 var app = builder.Build();
 
@@ -93,6 +142,19 @@ else
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
+// --- In the app configuration section, add: ---
+
+
+// The order is important:
+app.UseRouting();
+app.UseCors("SignalRPolicy");
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapHub<ChatHub>("/chathub")
+    .RequireAuthorization()
+    .RequireCors("SignalRPolicy");
+
 app.UseAntiforgery();
 
 app.MapRazorComponents<App>()
@@ -100,11 +162,11 @@ app.MapRazorComponents<App>()
     .AddInteractiveWebAssemblyRenderMode()
     .AddAdditionalAssemblies(typeof(Gotorz.Client._Imports).Assembly);
 
-// Add additional endpoints required by the Identity Razor components.
+// Add additional Identity endpoints
 app.MapAdditionalIdentityEndpoints();
 
-// Map SignalR hub
-app.MapHub<ChatHub>("/chathub");
+
+// -------------------------------------------------------------------------------
 
 // Initialize database and roles
 using (var scope = app.Services.CreateScope())
@@ -113,10 +175,8 @@ using (var scope = app.Services.CreateScope())
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-    // Apply migrations
     dbContext.Database.Migrate();
 
-    // Create roles if they don't exist
     string[] roles = { UserRoles.Admin, UserRoles.Customer, UserRoles.SalesAgent };
     foreach (var role in roles)
     {
@@ -126,7 +186,6 @@ using (var scope = app.Services.CreateScope())
         }
     }
 
-    // Create admin user if it doesn't exist
     var adminEmail = "admin@Gotorz.com";
     var adminUser = await userManager.FindByEmailAsync(adminEmail);
     if (adminUser == null)
@@ -143,7 +202,6 @@ using (var scope = app.Services.CreateScope())
         await userManager.AddToRoleAsync(adminUser, UserRoles.Admin);
     }
 
-    // Add FirstName and LastName claims for existing users
     var allUsers = userManager.Users.ToList();
     foreach (var user in allUsers)
     {
@@ -159,21 +217,15 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-app.MapAdditionalIdentityEndpoints();
-
 // Custom logout endpoint with activity logging
 app.MapPost("/Account/CustomLogout", async (HttpContext context, SignInManager<ApplicationUser> signInManager,
     UserManager<ApplicationUser> userManager, IActivityLogService activityLogService) =>
 {
     try
     {
-        // Get current user before signing out
         var user = await userManager.GetUserAsync(context.User);
-
-        // Sign out the user
         await signInManager.SignOutAsync();
 
-        // Log the logout activity
         if (user != null)
         {
             await activityLogService.LogActivityAsync(
@@ -184,19 +236,11 @@ app.MapPost("/Account/CustomLogout", async (HttpContext context, SignInManager<A
             );
         }
 
-        // Get return URL or default to home
         var returnUrl = context.Request.Form["returnUrl"].FirstOrDefault();
-        if (string.IsNullOrEmpty(returnUrl))
-        {
-            returnUrl = "/";
-        }
-
-        // Use Results.Redirect instead of context.Response.Redirect
-        return Results.Redirect(returnUrl);
+        return Results.Redirect(string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl);
     }
     catch (Exception ex)
     {
-        // Log error but still sign out
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
         logger.LogError($"Error during logout logging: {ex.Message}");
 

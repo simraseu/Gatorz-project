@@ -10,6 +10,8 @@
 @inject ApplicationDbContext DbContext
 @inject NavigationManager NavigationManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
 
 <PageTitle>Booking Details - Gotorz</PageTitle>
 
@@ -159,7 +161,7 @@
                                 <i class="bi bi-printer"></i> Print Booking Details
                             </button>
 
-                            @if (CanCancelBooking())
+                            @if (booking.Status.ToLower() != "cancelled")
                             {
                                 <button class="btn btn-danger" @onclick="ShowCancelModal">
                                     <i class="bi bi-x-circle"></i> Cancel Booking
@@ -226,14 +228,12 @@
                 return;
             }
 
-            // This is a simplified approach. In a real app, you'd have a proper way to load bookings
-            // for the specific identity user
             booking = await DbContext.Bookings
                 .Include(b => b.TravelPackages)
                 .ThenInclude(tp => tp.Flight)
                 .Include(b => b.TravelPackages)
                 .ThenInclude(tp => tp.Hotel)
-                .FirstOrDefaultAsync(b => b.Id == BookingId && b.UserId == 1); // Simplified
+                .FirstOrDefaultAsync(b => b.Id == BookingId && b.UserId == 1);
 
             if (booking == null)
             {
@@ -271,51 +271,46 @@
 
     private decimal CalculateTaxesAndFees()
     {
-        // In a real application, you'd calculate actual taxes and fees
-        // For this demo, we'll assume taxes and fees are the difference between total and subtotal
         var subtotal = CalculateSubtotal();
         return booking?.TotalPrice - subtotal ?? 0;
-    }
-
-    private bool CanCancelBooking()
-    {
-        if (booking == null || booking.Status.ToLower() == "cancelled")
-            return false;
-
-        // Check if all trips are in the future
-        return booking.TravelPackages.All(p => p.StartDate > DateTime.Now.AddDays(1));
     }
 
     private void ShowCancelModal()
     {
         showCancelModal = true;
+        StateHasChanged();
     }
 
     private void CloseCancelModal()
     {
         showCancelModal = false;
+        StateHasChanged();
     }
 
     private async Task CancelBooking()
     {
+        if (booking == null) return;
+
         try
         {
+            showCancelModal = false;
             booking.Status = "Cancelled";
             await DbContext.SaveChangesAsync();
-            showCancelModal = false;
+            errorMessage = null;
             StateHasChanged();
+
+            await JSRuntime.InvokeVoidAsync("alert", "Booking cancelled successfully!");
         }
         catch (Exception ex)
         {
             errorMessage = $"Failed to cancel booking: {ex.Message}";
-            CloseCancelModal();
+            showCancelModal = false;
+            StateHasChanged();
         }
     }
 
     private void PrintBookingDetails()
     {
-        // In a real application, you'd implement printing functionality
-        // For this demo, we'll just show a JavaScript alert
-        // You could use JSRuntime to call window.print()
+        // Implement printing functionality if needed
     }
 }

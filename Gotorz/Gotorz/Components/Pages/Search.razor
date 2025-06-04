@@ -159,7 +159,15 @@
                                 <span class="ms-2 badge bg-info">@package.GetDuration()</span>
                             </div>
                             <p class="card-text mb-1">
-                                <i class="bi bi-airplane"></i> @package.Airline
+                                <i class="bi bi-airplane"></i>
+                                @if (package.Flight != null && !string.IsNullOrEmpty(package.Flight.FlightNumber))
+                                {
+                                    @package.Flight.FlightNumber
+                                }
+                                else
+                                {
+                                    @package.Airline
+                                }
                             </p>
                             <p class="card-text mb-1">
                                 <i class="bi bi-building"></i> @package.HotelName
@@ -182,6 +190,8 @@
         </div>
     }
 </div>
+    
+
 
 @code {
     private string Origin { get; set; } = string.Empty;

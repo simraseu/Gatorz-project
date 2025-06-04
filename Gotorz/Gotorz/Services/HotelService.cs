@@ -179,6 +179,42 @@ namespace Gotorz.Services
                 {
                     try
                     {
+                        // Parse hotel price and convert with smart auto-correction
+                        var rawPrice = ParseDecimal(GetNestedString(offers[i], "offers", 0, "price", "base"))
+                            ?? ParseDecimal(GetNestedString(offers[i], "offers", 0, "price", "total"))
+                            ?? 250000; // Default
+
+                        // 🔍 DEBUGGING - Raw price info
+                        _logger.LogWarning($"Hotel raw price: {rawPrice}");
+                        _logger.LogWarning($"Hotel location: {GetNestedString(offers[i], "hotel", "address", "cityName")}");
+                        _logger.LogWarning($"Hotel name: {GetNestedString(offers[i], "hotel", "name")}");
+
+                        // Start with default division
+                        var convertedPrice = rawPrice / 500;
+
+                        // 🎯 SMART AUTO-CORRECTION with better thresholds
+                        string correctionNote = "no correction";
+                        if (convertedPrice > 300) // More than $300/night is probably too high for most hotels
+                        {
+                            convertedPrice = rawPrice / 1500; // Mid-level correction
+                            correctionNote = "high price corrected (/1500)";
+
+                            // Double-check if still too high
+                            if (convertedPrice > 500) // Still more than $500/night
+                            {
+                                convertedPrice = rawPrice / 5000; // More aggressive
+                                correctionNote = "very high price corrected (/5000)";
+                            }
+                        }
+                        else if (convertedPrice < 15) // Less than $15/night is probably wrong
+                        {
+                            convertedPrice = rawPrice / 100; // Less aggressive division  
+                            correctionNote = "low price corrected (/100)";
+                        }
+
+                        // 🔍 MORE DEBUGGING - Final price with correction info
+                        _logger.LogWarning($"Hotel converted price (after auto-correction): {convertedPrice} - {correctionNote}");
+
                         var hotelInfo = new HotelInfo
                         {
                             Id = i + 1,
@@ -192,12 +228,11 @@ namespace Gotorz.Services
                             RoomType = GetNestedString(offers[i], "offers", 0, "room", "typeEstimated", "category")
                                 ?? GetNestedString(offers[i], "offers", 0, "room", "type")
                                 ?? "Standard Room",
-                            PricePerNight = ParseDecimal(GetNestedString(offers[i], "offers", 0, "price", "base"))
-                                ?? ParseDecimal(GetNestedString(offers[i], "offers", 0, "price", "total"))
-                                ?? 100m
+                            PricePerNight = convertedPrice
                         };
 
                         results.Add(hotelInfo);
+                        _logger.LogInformation($"Parsed hotel {hotelInfo.HotelName} with price ${hotelInfo.PricePerNight:F2}/night");
                     }
                     catch (Exception ex)
                     {
@@ -212,6 +247,17 @@ namespace Gotorz.Services
                 _logger.LogError($"SearchHotelsAsync error: {ex.Message}");
                 return CreateMockHotels(cityCode, checkIn, checkOut);
             }
+        }
+
+        private decimal? ParseDecimal(string decimalString)
+        {
+            if (string.IsNullOrEmpty(decimalString))
+                return null;
+            if (decimal.TryParse(decimalString, out var result))
+            {
+                return result;
+            }
+            return null;
         }
 
 
@@ -278,17 +324,7 @@ namespace Gotorz.Services
             return null;
         }
 
-        private decimal? ParseDecimal(string decimalString)
-        {
-            if (string.IsNullOrEmpty(decimalString))
-                return null;
-
-            if (decimal.TryParse(decimalString, out var result))
-            {
-                return result;
-            }
-            return null;
-        }
+      
 
         public Task<HotelInfo> GetHotelDetailAsync(string hotelId)
         {

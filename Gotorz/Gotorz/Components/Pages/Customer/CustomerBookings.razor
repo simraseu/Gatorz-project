@@ -195,6 +195,22 @@
 
     private void ViewBookingDetails(int bookingId)
     {
-        NavigationManager.NavigateTo($"/customer/booking/{bookingId}");
+        try
+        {
+            var detailsUrl = $"/customer/booking/{bookingId}";
+            NavigationManager.NavigateTo(detailsUrl);
+        }
+        catch (Exception ex)
+        {
+            // Try fallback navigation
+            try
+            {
+                NavigationManager.NavigateTo($"/customer/booking/{bookingId}", forceLoad: true);
+            }
+            catch
+            {
+                // Navigation failed, but we'll continue silently
+            }
+        }
     }
 }

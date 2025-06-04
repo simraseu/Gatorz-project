@@ -230,7 +230,7 @@
                         </div>
                         <div class="price-item">
                             <span>Hotel (@travelPackage.GetDuration())</span>
-                            <span>$@((travelPackage.Hotel?.PricePerNight * (travelPackage.EndDate - travelPackage.StartDate).Days)?.ToString("N2") ?? "0")</span>
+                            <span>$@(GetHotelTotalPrice().ToString("N2"))</span>
                         </div>
                         @if (travelInsurance)
                         {
@@ -394,6 +394,15 @@
             isLoading = false;
         }
     }
+
+    private decimal GetHotelTotalPrice()
+    {
+        if (travelPackage?.Hotel == null) return 0;
+
+        var nights = (travelPackage.EndDate - travelPackage.StartDate).Days;
+        return travelPackage.Hotel.PricePerNight * nights;
+    }
+
 
     private async Task ConfirmBooking()
     {

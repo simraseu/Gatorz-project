@@ -78,21 +78,28 @@ namespace Gotorz.Services
                     {
                         try
                         {
+                            // Get flight carrier and number for proper display
+                            var carrierCode = GetNestedString(offers[i], "itineraries", 0, "segments", 0, "carrierCode");
+                            var flightNumber = GetNestedString(offers[i], "itineraries", 0, "segments", 0, "number");
+
+                            // Parse price and convert from cents to dollars
+                            var rawPrice = ParseDecimal(GetNestedString(offers[i], "price", "total"));
+                            var convertedPrice = rawPrice.HasValue ? rawPrice.Value / 100 : 0;
+
                             var flightInfo = new FlightInfo
                             {
                                 Id = i,
-                                FlightNumber = GetNestedString(offers[i], "itineraries", 0, "segments", 0, "carrierCode") +
-                                               GetNestedString(offers[i], "itineraries", 0, "segments", 0, "number"),
-                                Airline = GetNestedString(offers[i], "itineraries", 0, "segments", 0, "carrierCode"),
+                                FlightNumber = carrierCode + flightNumber,
+                                Airline = carrierCode,
                                 DepartureAirport = GetNestedString(offers[i], "itineraries", 0, "segments", 0, "departure", "iataCode"),
                                 ArrivalAirport = GetNestedString(offers[i], "itineraries", 0, "segments", 0, "arrival", "iataCode"),
                                 DepartureTime = ParseDateTime(GetNestedString(offers[i], "itineraries", 0, "segments", 0, "departure", "at")),
                                 ArrivalTime = ParseDateTime(GetNestedString(offers[i], "itineraries", 0, "segments", 0, "arrival", "at")),
-                                Price = ParseDecimal(GetNestedString(offers[i], "price", "total"))
+                                Price = convertedPrice
                             };
 
                             results.Add(flightInfo);
-                            _logger.LogInformation($"Parsed flight {flightInfo.FlightNumber} successfully");
+                            _logger.LogInformation($"Parsed flight {flightInfo.FlightNumber} with price ${flightInfo.Price:F2}");
                         }
                         catch (Exception ex)
                         {
@@ -124,6 +131,17 @@ namespace Gotorz.Services
                 // Return mock data for demonstration purposes
                 return CreateMockFlights(origin, destination, departureDate);
             }
+        }
+
+        private decimal? ParseDecimal(string decimalString)
+        {
+            if (string.IsNullOrEmpty(decimalString))
+                return null;
+            if (decimal.TryParse(decimalString, out var result))
+            {
+                return result;
+            }
+            return null;
         }
 
         // Helper methods for safer JSON parsing
@@ -166,15 +184,6 @@ namespace Gotorz.Services
                 return result;
             }
             return DateTime.Now;
-        }
-
-        private decimal ParseDecimal(string decimalString)
-        {
-            if (decimal.TryParse(decimalString, out var result))
-            {
-                return result;
-            }
-            return 0;
         }
 
         public Task<FlightInfo> GetFlightDetailAsync(string flightId)

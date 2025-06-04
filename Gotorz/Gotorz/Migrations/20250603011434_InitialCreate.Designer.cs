@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Gotorz.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20250602204946_InitialCreate")]
+    [Migration("20250603011434_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
