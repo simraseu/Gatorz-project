@@ -5,10 +5,10 @@ Amadeus for developers API for at hente både flytilbud og hoteltilbud. Systemet
 Admin, SalesAgent og Customer, som har hver især deres egne funktioner som de kan tilgå og benytte sig af.
 
 * Framework: ASP.NET Core 8.0
-* Projekttype: Blazor Web App
+* Projekttype: Blazor Server Web App
 * Database: Entity Framework og SQL Server Management Studio
 * Authentication: ASP.NET Core Identity
-
+* Hosting: Azure
 
 --Opsætningsvejledning--
 OBS! Bemærk det er Amadeus-API branchen der skal benyttes og ikke master.
