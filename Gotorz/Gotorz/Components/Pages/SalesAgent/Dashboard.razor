@@ -4,6 +4,7 @@
 @using Gotorz.Data
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Components.Authorization
+@using Gotorz.Models
 @attribute [Authorize(Roles = "SalesAgent,Admin")]
 @inject UserManager<ApplicationUser> UserManager
 @inject ApplicationDbContext DbContext
@@ -99,33 +100,47 @@
                 <div class="card-body">
                     <p class="text-muted">Recent customer inquiries and support requests.</p>
 
-                    @if (mockInquiries.Any())
+                    @if (realInquiries.Any())
                     {
                         <div class="list-group mb-3">
-                            @foreach (var inquiry in mockInquiries)
+                            @foreach (var inquiry in realInquiries)
                             {
-                                <a href="#" class="list-group-item list-group-item-action" @onclick="() => ShowInquiryModal(inquiry)">
+                                <!-- UPDATED: Make the entire item clickable and navigate with inquiry ID -->
+                                <a href="/sales/inquiries?inquiryId=@inquiry.Id" class="list-group-item list-group-item-action">
                                     <div class="d-flex w-100 justify-content-between">
                                         <h6 class="mb-1">@inquiry.Subject</h6>
-                                        <small class="@(inquiry.IsUrgent ? "text-danger" : "text-muted")">
-                                            @(inquiry.IsUrgent ? "Urgent" : inquiry.SubmittedDate.ToString("MMM d"))
+                                        <small class="@(inquiry.Priority == "High" ? "text-danger" : "text-muted")">
+                                            @(inquiry.Priority == "High" ? "🔴 Urgent" : inquiry.SubmittedDate.ToString("MMM d"))
                                         </small>
                                     </div>
                                     <p class="mb-1">From: @inquiry.CustomerName</p>
+                                    <p class="mb-1">
+                                        <span class="badge bg-@GetInquiryStatusColor(inquiry.Status)">@inquiry.Status</span>
+                                        <span class="badge bg-secondary ms-1">@inquiry.Category</span>
+                                        @if (inquiry.BookingId.HasValue)
+                                        {
+                                            <span class="badge bg-info ms-1">Booking #@inquiry.BookingId</span>
+                                        }
+                                    </p>
                                     <small class="text-muted">@(inquiry.Message.Length > 60 ? inquiry.Message.Substring(0, 60) + "..." : inquiry.Message)</small>
                                 </a>
                             }
                         </div>
-                        <a href="/sales/inquiries" class="btn btn-primary">View All Inquiries</a>
+                        <a href="/sales/inquiries" class="btn btn-primary">View All Inquiries (@realInquiries.Count)</a>
                     }
                     else
                     {
-                        <p>No pending customer inquiries.</p>
+                        <div class="text-center py-4">
+                            <i class="bi bi-chat-square-text fs-1 text-muted"></i>
+                            <p class="text-muted mt-2">No customer inquiries yet.</p>
+                            <p class="small text-muted">Customers can submit inquiries from their dashboard.</p>
+                            <a href="/customer/support" class="btn btn-sm btn-outline-primary">Test: Submit Inquiry</a>
+                        </div>
                     }
+                </div>
                 </div>
             </div>
         </div>
-    </div>
 
     <div class="row">
         <!-- Quick Actions -->
@@ -174,37 +189,69 @@
 @if (selectedInquiry != null)
 {
     <div class="modal fade show" style="display: block;" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Customer Inquiry</h5>
+                    <h5 class="modal-title">Customer Inquiry Details</h5>
                     <button type="button" class="btn-close" @onclick="CloseInquiryModal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">From:</label>
-                        <p>@selectedInquiry.CustomerName (@selectedInquiry.CustomerEmail)</p>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p><strong>Customer:</strong> @selectedInquiry.CustomerName</p>
+                            <p><strong>Email:</strong> @selectedInquiry.CustomerEmail</p>
+                            @if (selectedInquiry.BookingId.HasValue)
+                            {
+                                <p><strong>Booking:</strong> #@selectedInquiry.BookingId</p>
+                            }
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Category:</strong> @selectedInquiry.Category</p>
+                            <p>
+                                <strong>Priority:</strong>
+                                <span class="badge bg-@(selectedInquiry.Priority == "High" ? "danger" : selectedInquiry.Priority == "Medium" ? "warning" : "info")">
+                                    @selectedInquiry.Priority
+                                </span>
+                            </p>
+                            <p>
+                                <strong>Status:</strong>
+                                <span class="badge bg-@GetInquiryStatusColor(selectedInquiry.Status)">@selectedInquiry.Status</span>
+                            </p>
+                        </div>
                     </div>
+
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Subject:</label>
+                        <h6>Subject:</h6>
                         <p>@selectedInquiry.Subject</p>
                     </div>
+
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Message:</label>
-                        <p>@selectedInquiry.Message</p>
+                        <h6>Message:</h6>
+                        <div class="border p-3 bg-light rounded">
+                            @selectedInquiry.Message
+                        </div>
                     </div>
+
                     <div class="mb-3">
-                        <label class="form-label fw-bold">Submitted:</label>
-                        <p>@selectedInquiry.SubmittedDate.ToString("MMMM d, yyyy HH:mm")</p>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Reply:</label>
-                        <textarea class="form-control" rows="3" placeholder="Type your response here..."></textarea>
+                        <small class="text-muted">
+                            Submitted: @selectedInquiry.SubmittedDate.ToString("MMMM d, yyyy 'at' h:mm tt")
+                        </small>
                     </div>
                 </div>
                 <div class="modal-footer">
+                    @if (selectedInquiry.Status == "Open")
+                    {
+                        <button type="button" class="btn btn-primary" @onclick="MarkAsInProgress">
+                            <i class="bi bi-play-circle"></i> Mark In Progress
+                        </button>
+                    }
+                    @if (selectedInquiry.Status != "Resolved")
+                    {
+                        <button type="button" class="btn btn-success" @onclick="MarkAsResolved">
+                            <i class="bi bi-check-circle"></i> Mark Resolved
+                        </button>
+                    }
                     <button type="button" class="btn btn-secondary" @onclick="CloseInquiryModal">Close</button>
-                    <button type="button" class="btn btn-primary">Send Reply</button>
                 </div>
             </div>
         </div>
@@ -220,21 +267,8 @@
     private decimal totalRevenue = 0;
     private string revenueFormatted => totalRevenue.ToString("N0");
     private List<Booking> recentBookings = new List<Booking>();
-
-    // Mock customer inquiry class (this would be a real model in your application)
-    private class CustomerInquiry
-    {
-        public int Id { get; set; }
-        public string CustomerName { get; set; }
-        public string CustomerEmail { get; set; }
-        public string Subject { get; set; }
-        public string Message { get; set; }
-        public DateTime SubmittedDate { get; set; }
-        public bool IsUrgent { get; set; }
-    }
-
-    private List<CustomerInquiry> mockInquiries = new List<CustomerInquiry>();
-    private CustomerInquiry selectedInquiry;
+    private List<CustomerInquiry> realInquiries = new List<CustomerInquiry>();
+    private CustomerInquiry? selectedInquiry;
 
     private class DestinationStat
     {
@@ -273,28 +307,27 @@
 
             // Calculate total revenue
             totalRevenue = await DbContext.Bookings.SumAsync(b => b.TotalPrice);
+
+            // Load real customer inquiries
+            realInquiries = await DbContext.CustomerInquiries
+    .OrderByDescending(i => i.SubmittedDate)
+    .Take(5)
+    .ToListAsync();
+
+            pendingSupport = await DbContext.CustomerInquiries
+                .CountAsync(i => i.Status == "Open");
         }
         catch (Exception)
         {
-            // In case of database errors, we'll use mock data
-            totalBookings = 125;
-            newBookings = 17;
-
-            // Create some mock bookings if none were loaded
-            if (!recentBookings.Any())
-            {
-                recentBookings = CreateMockBookings();
-            }
-
-            totalRevenue = 245750;
+            // Initialize with empty data if database fails
+            totalBookings = 0;
+            newBookings = 0;
+            totalRevenue = 0;
+            realInquiries = new List<CustomerInquiry>();
+            pendingSupport = 0;
+            recentBookings = new List<Booking>();
+            popularDestinations = new List<DestinationStat>();
         }
-
-        // Load mock customer inquiries (in a real app, this would be from the database)
-        mockInquiries = CreateMockInquiries();
-        pendingSupport = mockInquiries.Count;
-
-        // Create mock destination stats (in a real app, this would be from the database)
-        popularDestinations = CreateMockDestinationStats();
     }
 
     private string GetDestinationName(Booking booking)
@@ -322,6 +355,17 @@
         };
     }
 
+    private string GetInquiryStatusColor(string status)
+    {
+        return status switch
+        {
+            "Open" => "warning",
+            "InProgress" => "primary",
+            "Resolved" => "success",
+            _ => "secondary"
+        };
+    }
+
     private void ShowInquiryModal(CustomerInquiry inquiry)
     {
         selectedInquiry = inquiry;
@@ -330,6 +374,30 @@
     private void CloseInquiryModal()
     {
         selectedInquiry = null;
+    }
+
+    private async Task MarkAsInProgress()
+    {
+        if (selectedInquiry != null)
+        {
+            selectedInquiry.Status = "InProgress";
+            selectedInquiry.LastUpdated = DateTime.UtcNow;
+            await DbContext.SaveChangesAsync();
+            selectedInquiry = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task MarkAsResolved()
+    {
+        if (selectedInquiry != null)
+        {
+            selectedInquiry.Status = "Resolved";
+            selectedInquiry.LastUpdated = DateTime.UtcNow;
+            await DbContext.SaveChangesAsync();
+            selectedInquiry = null;
+            StateHasChanged();
+        }
     }
 
     // Method to create mock bookings for preview
@@ -386,50 +454,6 @@
                 TravelPackages = new List<TravelPackage> {
                     new TravelPackage { Destination = "London" }
                 }
-            }
-        };
-    }
-
-    // Method to create mock customer inquiries
-    private List<CustomerInquiry> CreateMockInquiries()
-    {
-        return new List<CustomerInquiry>
-        {
-            new CustomerInquiry {
-                Id = 1,
-                CustomerName = "John Smith",
-                CustomerEmail = "john.smith@example.com",
-                Subject = "Booking Modification Request",
-                Message = "I need to change my flight date from July 10 to July 15. Is this possible and what would be the additional cost?",
-                SubmittedDate = DateTime.Now.AddHours(-5),
-                IsUrgent = true
-            },
-            new CustomerInquiry {
-                Id = 2,
-                CustomerName = "Sarah Johnson",
-                CustomerEmail = "sarah.j@example.com",
-                Subject = "Special Request for Hotel",
-                Message = "I have booked the Rome package and would like to request a room with a view if possible.",
-                SubmittedDate = DateTime.Now.AddDays(-1),
-                IsUrgent = false
-            },
-            new CustomerInquiry {
-                Id = 3,
-                CustomerName = "Michael Rodriguez",
-                CustomerEmail = "miker@example.com",
-                Subject = "Cancellation Policy",
-                Message = "Could you please explain the cancellation policy for my Barcelona trip? I might need to cancel due to work commitments.",
-                SubmittedDate = DateTime.Now.AddDays(-2),
-                IsUrgent = false
-            },
-            new CustomerInquiry {
-                Id = 4,
-                CustomerName = "Emma Wilson",
-                CustomerEmail = "emma.w@example.com",
-                Subject = "Airport Transfer Question",
-                Message = "Does my Dubai package include airport transfers? If not, how can I add this service?",
-                SubmittedDate = DateTime.Now.AddDays(-3),
-                IsUrgent = false
             }
         };
     }

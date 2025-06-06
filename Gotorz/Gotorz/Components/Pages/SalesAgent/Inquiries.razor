@@ -1,8 +1,18 @@
 ﻿@page "/sales/inquiries"
+@page "/sales/inquiries/{InquiryIdParam:int?}"
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
 @using Gotorz.Data
+@using Gotorz.Models
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
 @attribute [Authorize(Roles = "SalesAgent,Admin")]
+@inject ApplicationDbContext DbContext
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
+@rendermode InteractiveServer
 
 <PageTitle>Customer Inquiries - Gotorz</PageTitle>
 
@@ -10,40 +20,42 @@
     <h1>Customer Inquiries</h1>
     <p class="lead">Manage and respond to customer inquiries and support requests</p>
 
+    <!-- Search and Filter Section -->
     <div class="row mb-4">
         <div class="col-md-6">
             <div class="input-group">
-                <input type="text" class="form-control" placeholder="Search by customer name or subject" 
-                       @bind="searchTerm" @bind:event="oninput" />
+                <input type="text" class="form-control" placeholder="Search by customer name or subject"
+                       @bind="searchTerm" @bind:event="oninput" @onkeypress="OnSearchKeyPress" />
                 <button class="btn btn-primary" type="button" @onclick="ApplyFilters">
                     <i class="bi bi-search"></i> Search
                 </button>
             </div>
         </div>
         <div class="col-md-3">
-            <select class="form-select" @bind="statusFilter">
+            <select class="form-select" @bind="statusFilter" @bind:after="ApplyFilters">
                 <option value="">All Statuses</option>
-                <option value="open">Open</option>
-                <option value="inprogress">In Progress</option>
-                <option value="resolved">Resolved</option>
+                <option value="Open">Open</option>
+                <option value="InProgress">In Progress</option>
+                <option value="Resolved">Resolved</option>
             </select>
         </div>
         <div class="col-md-3">
-            <select class="form-select" @bind="priorityFilter">
+            <select class="form-select" @bind="priorityFilter" @bind:after="ApplyFilters">
                 <option value="">All Priorities</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
             </select>
         </div>
     </div>
 
+    <!-- Stats Cards -->
     <div class="row mb-4">
         <div class="col-md-3">
             <div class="card text-white bg-primary">
                 <div class="card-body">
                     <h5 class="card-title">Total Inquiries</h5>
-                    <h2>@inquiries.Count</h2>
+                    <h2>@filteredInquiries.Count</h2>
                 </div>
             </div>
         </div>
@@ -51,7 +63,7 @@
             <div class="card text-white bg-danger">
                 <div class="card-body">
                     <h5 class="card-title">High Priority</h5>
-                    <h2>@inquiries.Count(i => i.Priority == "high")</h2>
+                    <h2>@filteredInquiries.Count(i => i.Priority == "High")</h2>
                 </div>
             </div>
         </div>
@@ -59,7 +71,7 @@
             <div class="card text-white bg-warning">
                 <div class="card-body">
                     <h5 class="card-title">Pending Response</h5>
-                    <h2>@inquiries.Count(i => i.Status == "open")</h2>
+                    <h2>@filteredInquiries.Count(i => i.Status == "Open")</h2>
                 </div>
             </div>
         </div>
@@ -67,178 +79,248 @@
             <div class="card text-white bg-success">
                 <div class="card-body">
                     <h5 class="card-title">Resolved Today</h5>
-                    <h2>@inquiries.Count(i => i.Status == "resolved" && i.LastUpdated.Date == DateTime.Today)</h2>
+                    <h2>@filteredInquiries.Count(i => i.Status == "Resolved" && i.LastUpdated.Date == DateTime.Today)</h2>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-striped table-hover">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Customer</th>
-                    <th>Subject</th>
-                    <th>Received</th>
-                    <th>Status</th>
-                    <th>Priority</th>
-                    <th>Assigned To</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var inquiry in filteredInquiries)
-                {
+    <!-- Inquiries Table -->
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading inquiries...</span>
+            </div>
+            <p class="mt-2">Loading customer inquiries...</p>
+        </div>
+    }
+    else if (!filteredInquiries.Any())
+    {
+        <div class="alert alert-info text-center">
+            <i class="bi bi-chat-square-text fs-1"></i>
+            <h4>No inquiries found</h4>
+            @if (string.IsNullOrEmpty(searchTerm) && string.IsNullOrEmpty(statusFilter) && string.IsNullOrEmpty(priorityFilter))
+            {
+                <p>No customer inquiries have been submitted yet.</p>
+                <a href="/customer/support" class="btn btn-outline-primary">Test: Submit New Inquiry</a>
+            }
+            else
+            {
+                <p>No inquiries match your current filters.</p>
+                <button class="btn btn-outline-primary" @onclick="ClearFilters">Clear Filters</button>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
                     <tr>
-                        <td>@inquiry.Id</td>
-                        <td>@inquiry.CustomerName</td>
-                        <td>@inquiry.Subject</td>
-                        <td>@inquiry.SubmittedDate.ToString("MM/dd/yyyy")</td>
-                        <td>
-                            <span class="badge bg-@GetStatusColor(inquiry.Status)">
-                                @GetStatusName(inquiry.Status)
-                            </span>
-                        </td>
-                        <td>
-                            <span class="badge bg-@GetPriorityColor(inquiry.Priority)">
-                                @inquiry.Priority.ToUpper()
-                            </span>
-                        </td>
-                        <td>@(string.IsNullOrEmpty(inquiry.AssignedTo) ? "-" : inquiry.AssignedTo)</td>
-                        <td>
-                            <div class="btn-group">
-                                <button class="btn btn-sm btn-primary" @onclick="() => ShowInquiryDetails(inquiry)">View</button>
-                                <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowReplyModal(inquiry)">Reply</button>
-                                <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
-                                    More
-                                </button>
-                                <div class="dropdown-menu">
-                                    <button class="dropdown-item" @onclick='() => ChangeStatus(inquiry, "inprogress")'>Mark In Progress</button>
-                                    <button class="dropdown-item" @onclick='() => ChangeStatus(inquiry, "resolved")'>Mark Resolved</button>
-                                    <div class="dropdown-divider"></div>
-                                    <button class="dropdown-item" @onclick='() => ChangePriority(inquiry, "high")'>Set High Priority</button>
-                                    <button class="dropdown-item" @onclick='() => ChangePriority(inquiry, "medium")'>Set Medium Priority</button>
-                                    <button class="dropdown-item" @onclick='() => ChangePriority(inquiry, "low")'>Set Low Priority</button>
-                                </div>
-                            </div>
-                        </td>
+                        <th>ID</th>
+                        <th>Customer</th>
+                        <th>Subject</th>
+                        <th>Category</th>
+                        <th>Received</th>
+                        <th>Status</th>
+                        <th>Priority</th>
+                        <th>Booking</th>
+                        <th>Actions</th>
                     </tr>
-                }
-            </tbody>
-        </table>
-    </div>
+                </thead>
+                <tbody>
+                    @foreach (var inquiry in filteredInquiries)
+                    {
+                        <tr class="@(inquiry.Priority == "High" ? "table-warning" : "")">
+                            <td>@inquiry.Id</td>
+                            <td>
+                                <div>
+                                    <strong>@inquiry.CustomerName</strong>
+                                    <br />
+                                    <small class="text-muted">@inquiry.CustomerEmail</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div style="max-width: 200px;">
+                                    @(inquiry.Subject.Length > 40 ? inquiry.Subject.Substring(0, 40) + "..." : inquiry.Subject)
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">@inquiry.Category</span>
+                            </td>
+                            <td>
+                                @inquiry.SubmittedDate.ToString("MM/dd/yyyy")
+                                <br />
+                                <small class="text-muted">@inquiry.SubmittedDate.ToString("HH:mm")</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-@GetStatusColor(inquiry.Status)">
+                                    @GetStatusDisplay(inquiry.Status)
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge bg-@GetPriorityColor(inquiry.Priority)">
+                                    @inquiry.Priority
+                                    @if (inquiry.Priority == "High")
+                                    {
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                    }
+                                </span>
+                            </td>
+                            <td>
+                                @if (inquiry.BookingId.HasValue)
+                                {
+                                    <span class="badge bg-info">#@inquiry.BookingId</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-primary" @onclick="() => ShowInquiryDetails(inquiry)">
+                                        <i class="bi bi-eye"></i> View
+                                    </button>
+                                    @if (inquiry.Status != "Resolved")
+                                    {
+                                        <div class="btn-group">
+                                            @if (inquiry.Status == "Open")
+                                            {
+                                                <button class="btn btn-sm btn-success" @onclick="() => MarkInProgress(inquiry)" title="Mark In Progress">
+                                                    <i class="bi bi-play-circle"></i>
+                                                </button>
+                                            }
+                                            <button class="btn btn-sm btn-primary" @onclick="() => MarkResolved(inquiry)" title="Mark Resolved">
+                                                <i class="bi bi-check-circle"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-warning" @onclick="() => SetHighPriority(inquiry)" title="Set High Priority">
+                                                <i class="bi bi-exclamation-triangle"></i>
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
 </div>
 
+<!-- Inquiry Details Modal -->
 @if (selectedInquiry != null && showDetailsModal)
 {
     <div class="modal fade show" style="display: block;" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Inquiry Details</h5>
+                    <h5 class="modal-title">
+                        <i class="bi bi-chat-square-text"></i> Inquiry #@selectedInquiry.Id Details
+                    </h5>
                     <button type="button" class="btn-close" @onclick="CloseModals"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <h6>Customer Information</h6>
-                            <p><strong>Name:</strong> @selectedInquiry.CustomerName</p>
-                            <p><strong>Email:</strong> @selectedInquiry.CustomerEmail</p>
-                            <p><strong>Booking ID:</strong> @(selectedInquiry.BookingId > 0 ? selectedInquiry.BookingId.ToString() : "N/A")</p>
+                    <!-- Replace the modal body in your Inquiries.razor -->
+                    <div class="modal-body">
+                        <!-- Customer Information -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h6><i class="bi bi-person"></i> Customer Information</h6>
+                                <p><strong>Name:</strong> @selectedInquiry.CustomerName</p>
+                                <p><strong>Email:</strong> @selectedInquiry.CustomerEmail</p>
+                                @if (selectedInquiry.BookingId.HasValue)
+                                {
+                                    <p><strong>Related Booking:</strong> #@selectedInquiry.BookingId</p>
+                                }
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="bi bi-info-circle"></i> Inquiry Details</h6>
+                                <p><strong>Category:</strong> <span class="badge bg-secondary">@selectedInquiry.Category</span></p>
+                                <p><strong>Priority:</strong> <span class="badge bg-@GetPriorityColor(selectedInquiry.Priority)">@selectedInquiry.Priority</span></p>
+                                <p><strong>Status:</strong> <span class="badge bg-@GetStatusColor(selectedInquiry.Status)">@GetStatusDisplay(selectedInquiry.Status)</span></p>
+                                <p><strong>Submitted:</strong> @selectedInquiry.SubmittedDate.ToString("MMMM d, yyyy 'at' h:mm tt")</p>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <h6>Inquiry Details</h6>
-                            <p><strong>Date Received:</strong> @selectedInquiry.SubmittedDate.ToString("MM/dd/yyyy HH:mm")</p>
-                            <p>
-                                <strong>Status:</strong>
-                                <span class="badge bg-@GetStatusColor(selectedInquiry.Status)">@GetStatusName(selectedInquiry.Status)</span>
-                            </p>
-                            <p>
-                                <strong>Priority:</strong>
-                                <span class="badge bg-@GetPriorityColor(selectedInquiry.Priority)">@selectedInquiry.Priority.ToUpper()</span>
-                            </p>
-                        </div>
-                    </div>
 
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h6 class="mb-0">@selectedInquiry.Subject</h6>
+                        <!-- Original Customer Message -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><i class="bi bi-envelope"></i> @selectedInquiry.Subject</h6>
+                            </div>
+                            <div class="card-body">
+                                <p style="white-space: pre-wrap;">@selectedInquiry.Message</p>
+                            </div>
                         </div>
-                        <div class="card-body">
-                            <p>@selectedInquiry.Message</p>
-                        </div>
-                    </div>
 
-                    <h6>Conversation History</h6>
-                    <div class="conversation-history mb-4">
-                        @foreach (var reply in inquiryReplies.Where(r => r.InquiryId == selectedInquiry.Id).OrderBy(r => r.ReplyDate))
+                        <!-- Agent Reply Section (NEW) -->
+                        @if (!string.IsNullOrEmpty(selectedInquiry.AgentReply))
                         {
-                            <div class="card mb-2 @(reply.IsFromCustomer ? "border-info" : "border-primary")">
-                                <div class="card-header bg-@(reply.IsFromCustomer ? "info" : "primary") text-white">
-                                    <div class="d-flex justify-content-between">
-                                        <span>@(reply.IsFromCustomer ? "Customer" : reply.SentBy)</span>
-                                        <span>@reply.ReplyDate.ToString("MM/dd/yyyy HH:mm")</span>
-                                    </div>
+                            <div class="card mb-4 border-primary">
+                                <div class="card-header bg-primary text-white">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-reply"></i> Agent Reply
+                                        @if (!string.IsNullOrEmpty(selectedInquiry.RepliedBy))
+                                        {
+                                            <small class="ms-2">by @selectedInquiry.RepliedBy</small>
+                                        }
+                                        @if (selectedInquiry.ReplyDate.HasValue)
+                                        {
+                                            <small class="ms-2">on @selectedInquiry.ReplyDate.Value.ToString("MMM d, yyyy HH:mm")</small>
+                                        }
+                                    </h6>
                                 </div>
                                 <div class="card-body">
-                                    <p class="mb-0">@reply.Message</p>
+                                    <p style="white-space: pre-wrap;">@selectedInquiry.AgentReply</p>
                                 </div>
                             </div>
                         }
-                    </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">Quick Reply</label>
-                        <textarea class="form-control" rows="4" placeholder="Type your reply here..." @bind="replyMessage"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <div class="btn-group me-auto">
-                        <button class="btn btn-outline-primary" @onclick='() => ChangeStatus(selectedInquiry, "inprogress")'>Mark In Progress</button>
-                        <button class="btn btn-outline-success" @onclick='() => ChangeStatus(selectedInquiry, "resolved")'>Mark Resolved</button>
+                        <!-- Reply Input Section (NEW) -->
+                        @if (selectedInquiry.Status != "Resolved")
+                        {
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-chat-dots"></i>
+                                        @(string.IsNullOrEmpty(selectedInquiry.AgentReply) ? "Send Reply" : "Update Reply")
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <textarea class="form-control" rows="4" @bind="agentReplyText"
+                                                  placeholder="Type your reply to the customer here..."></textarea>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" @bind="markResolvedAfterReply" id="resolveCheck">
+                                            <label class="form-check-label" for="resolveCheck">
+                                                Mark as resolved after sending reply
+                                            </label>
+                                        </div>
+                                        <button class="btn btn-primary" @onclick="SendAgentReply"
+                                                disabled="@(string.IsNullOrWhiteSpace(agentReplyText) || isSendingReply)">
+                                            @if (isSendingReply)
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-2"></span>
+                                            }
+                                            <i class="bi bi-send"></i>
+                                            @(string.IsNullOrEmpty(selectedInquiry.AgentReply) ? "Send Reply" : "Update Reply")
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-success">
+                                <i class="bi bi-check-circle"></i> This inquiry has been resolved.
+                            </div>
+                        }
                     </div>
                     <button type="button" class="btn btn-secondary" @onclick="CloseModals">Close</button>
-                    <button type="button" class="btn btn-primary" @onclick="SendReply">Send Reply</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="modal-backdrop fade show"></div>
-}
-
-@if (selectedInquiry != null && showReplyModal)
-{
-    <div class="modal fade show" style="display: block;" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Reply to Inquiry</h5>
-                    <button type="button" class="btn-close" @onclick="CloseModals"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">To</label>
-                        <input type="text" class="form-control" value="@selectedInquiry.CustomerEmail" disabled />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Subject</label>
-                        <input type="text" class="form-control" value="Re: @selectedInquiry.Subject" disabled />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Message</label>
-                        <textarea class="form-control" rows="6" placeholder="Type your reply here..." @bind="replyMessage"></textarea>
-                    </div>
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" type="checkbox" id="markResolvedCheck" @bind="markResolvedAfterReply" />
-                        <label class="form-check-label" for="markResolvedCheck">
-                            Mark as resolved after sending reply
-                        </label>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" @onclick="CloseModals">Cancel</button>
-                    <button type="button" class="btn btn-primary" @onclick="SendReply">Send Reply</button>
                 </div>
             </div>
         </div>
@@ -247,409 +329,309 @@
 }
 
 @code {
-    // Inquiry model class
-    private class CustomerInquiry
-    {
-        public int Id { get; set; }
-        public string CustomerName { get; set; }
-        public string CustomerEmail { get; set; }
-        public int BookingId { get; set; }
-        public string Subject { get; set; }
-        public string Message { get; set; }
-        public DateTime SubmittedDate { get; set; }
-        public DateTime LastUpdated { get; set; }
-        public string Status { get; set; } // open, inprogress, resolved
-        public string Priority { get; set; } // high, medium, low
-        public string AssignedTo { get; set; }
-    }
-    
-    // Reply model class
-    private class InquiryReply
-    {
-        public int Id { get; set; }
-        public int InquiryId { get; set; }
-        public string Message { get; set; }
-        public DateTime ReplyDate { get; set; }
-        public string SentBy { get; set; }
-        public bool IsFromCustomer { get; set; }
-    }
-    
-    private List<CustomerInquiry> inquiries = new List<CustomerInquiry>();
+    // Parameters
+    [Parameter] public int? InquiryIdParam { get; set; }
+    [SupplyParameterFromQuery] public int? InquiryId { get; set; }
+
+    // Data properties
+    private List<CustomerInquiry> allInquiries = new List<CustomerInquiry>();
     private List<CustomerInquiry> filteredInquiries = new List<CustomerInquiry>();
-    private List<InquiryReply> inquiryReplies = new List<InquiryReply>();
-    
+    private CustomerInquiry? selectedInquiry;
+    private ApplicationUser? currentUser;
+
+    // UI state
+    private bool isLoading = true;
+    private bool showDetailsModal = false;
+
     // Search and filter
     private string searchTerm = "";
     private string statusFilter = "";
     private string priorityFilter = "";
-    
-    // Modals
-    private CustomerInquiry selectedInquiry;
-    private bool showDetailsModal = false;
-    private bool showReplyModal = false;
-    private string replyMessage = "";
-    private bool markResolvedAfterReply = false;
 
-    protected override void OnInitialized()
+    // Reply system properties
+    private string agentReplyText = "";
+    private bool markResolvedAfterReply = false;
+    private bool isSendingReply = false;
+
+    protected override async Task OnInitializedAsync()
     {
-        // Create mock data
-        inquiries = CreateMockInquiries();
-        inquiryReplies = CreateMockReplies();
-        
-        // Apply initial filtering
-        ApplyFilters();
+        await LoadCurrentUser();
+        await LoadInquiries();
     }
-    
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Check if we need to open a specific inquiry
+        var targetInquiryId = InquiryIdParam ?? InquiryId;
+
+        if (targetInquiryId.HasValue && allInquiries.Any())
+        {
+            var targetInquiry = allInquiries.FirstOrDefault(i => i.Id == targetInquiryId.Value);
+            if (targetInquiry != null)
+            {
+                // Small delay to ensure UI is rendered
+                await Task.Delay(100);
+                ShowInquiryDetails(targetInquiry);
+
+                // Clear the URL parameter to avoid showing modal on refresh
+                NavigationManager.NavigateTo("/sales/inquiries", replace: true);
+            }
+        }
+    }
+
+    private async Task LoadCurrentUser()
+    {
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            currentUser = await UserManager.GetUserAsync(authState.User);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading user: {ex.Message}");
+        }
+    }
+
+    private async Task LoadInquiries()
+    {
+        try
+        {
+            isLoading = true;
+
+            allInquiries = await DbContext.CustomerInquiries
+                .OrderByDescending(i => i.SubmittedDate)
+                .ToListAsync();
+
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading inquiries: {ex.Message}");
+            allInquiries = new List<CustomerInquiry>();
+            filteredInquiries = new List<CustomerInquiry>();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
     private void ApplyFilters()
     {
-        var filtered = inquiries;
-        
+        var filtered = allInquiries.AsQueryable();
+
         // Apply search filter
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
-            filtered = filtered.Where(i => 
-                i.CustomerName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) || 
-                i.Subject.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
-            ).ToList();
+            filtered = filtered.Where(i =>
+                i.CustomerName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                i.Subject.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                i.CustomerEmail.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
         }
-        
+
         // Apply status filter
         if (!string.IsNullOrWhiteSpace(statusFilter))
         {
-            filtered = filtered.Where(i => i.Status == statusFilter).ToList();
+            filtered = filtered.Where(i => i.Status == statusFilter);
         }
-        
+
         // Apply priority filter
         if (!string.IsNullOrWhiteSpace(priorityFilter))
         {
-            filtered = filtered.Where(i => i.Priority == priorityFilter).ToList();
+            filtered = filtered.Where(i => i.Priority == priorityFilter);
         }
-        
-        filteredInquiries = filtered;
+
+        filteredInquiries = filtered.OrderByDescending(i => i.SubmittedDate).ToList();
+        StateHasChanged();
     }
-    
+
+    private void ClearFilters()
+    {
+        searchTerm = "";
+        statusFilter = "";
+        priorityFilter = "";
+        ApplyFilters();
+    }
+
+    private async Task OnSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            ApplyFilters();
+        }
+    }
+
+    // Status and priority helper methods
     private string GetStatusColor(string status)
     {
         return status switch
         {
-            "open" => "warning",
-            "inprogress" => "primary",
-            "resolved" => "success",
+            "Open" => "warning",
+            "InProgress" => "primary",
+            "Resolved" => "success",
             _ => "secondary"
         };
     }
-    
-    private string GetStatusName(string status)
+
+    private string GetStatusDisplay(string status)
     {
         return status switch
         {
-            "open" => "Open",
-            "inprogress" => "In Progress",
-            "resolved" => "Resolved",
+            "InProgress" => "In Progress",
             _ => status
         };
     }
-    
+
     private string GetPriorityColor(string priority)
     {
         return priority switch
         {
-            "high" => "danger",
-            "medium" => "warning",
-            "low" => "info",
+            "High" => "danger",
+            "Medium" => "warning",
+            "Low" => "info",
             _ => "secondary"
         };
     }
-    
+
+    // Modal methods
     private void ShowInquiryDetails(CustomerInquiry inquiry)
     {
         selectedInquiry = inquiry;
         showDetailsModal = true;
-        showReplyModal = false;
-        replyMessage = "";
-    }
 
-    private void ShowReplyModal(CustomerInquiry inquiry)
-    {
-        selectedInquiry = inquiry;
-        showReplyModal = true;
-        showDetailsModal = false;
-        replyMessage = "";
+        // Load existing reply if there is one
+        agentReplyText = selectedInquiry.AgentReply ?? "";
         markResolvedAfterReply = false;
     }
 
     private void CloseModals()
     {
         showDetailsModal = false;
-        showReplyModal = false;
         selectedInquiry = null;
-        replyMessage = "";
+        agentReplyText = "";
+        markResolvedAfterReply = false;
+        isSendingReply = false;
     }
 
-    private void ChangeStatus(CustomerInquiry inquiry, string newStatus)
+    // NSend agent reply method
+    private async Task SendAgentReply()
     {
-        inquiry.Status = newStatus;
-        inquiry.LastUpdated = DateTime.Now;
+        if (selectedInquiry == null || string.IsNullOrWhiteSpace(agentReplyText))
+            return;
 
-        // If the inquiry is resolved, update the assigned to field
-        if (newStatus == "resolved" && string.IsNullOrEmpty(inquiry.AssignedTo))
+        try
         {
-            inquiry.AssignedTo = "Sales Agent";
+            isSendingReply = true;
+
+            // Update the inquiry with agent reply
+            selectedInquiry.AgentReply = agentReplyText.Trim();
+            selectedInquiry.ReplyDate = DateTime.UtcNow;
+            selectedInquiry.RepliedBy = currentUser != null ? $"{currentUser.FirstName} {currentUser.LastName}" : "Sales Agent";
+            selectedInquiry.LastUpdated = DateTime.UtcNow;
+
+            // Mark as resolved if checkbox is checked
+            if (markResolvedAfterReply)
+            {
+                selectedInquiry.Status = "Resolved";
+            }
+            else if (selectedInquiry.Status == "Open")
+            {
+                selectedInquiry.Status = "InProgress";
+            }
+
+            // Save to database
+            await DbContext.SaveChangesAsync();
+
+            // Show success message
+            await JSRuntime.InvokeVoidAsync("alert", "Reply sent successfully!");
+
+            // Close modal if resolved, otherwise keep it open
+            if (markResolvedAfterReply)
+            {
+                CloseModals();
+            }
+
+            // Refresh the list
+            ApplyFilters();
         }
-
-        ApplyFilters();
-        StateHasChanged();
-    }
-
-    private void ChangePriority(CustomerInquiry inquiry, string newPriority)
-    {
-        inquiry.Priority = newPriority;
-        inquiry.LastUpdated = DateTime.Now;
-
-        ApplyFilters();
-        StateHasChanged();
-    }
-
-    private void SendReply()
-    {
-        if (selectedInquiry != null && !string.IsNullOrWhiteSpace(replyMessage))
+        catch (Exception ex)
         {
-            // Add the reply
-            inquiryReplies.Add(new InquiryReply
-                {
-                    Id = inquiryReplies.Count + 1,
-                    InquiryId = selectedInquiry.Id,
-                    Message = replyMessage,
-                    ReplyDate = DateTime.Now,
-                    SentBy = "Sales Agent",
-                    IsFromCustomer = false
-                });
+            await JSRuntime.InvokeVoidAsync("alert", $"Error sending reply: {ex.Message}");
+        }
+        finally
+        {
+            isSendingReply = false;
+        }
+    }
 
-            // Update the inquiry
-            selectedInquiry.LastUpdated = DateTime.Now;
+    // Simplified status update methods
+    private async Task MarkInProgress(CustomerInquiry inquiry)
+    {
+        await UpdateInquiryStatus(inquiry, "InProgress");
+    }
 
-            // If we're in the reply modal and the user checked to mark as resolved
-            if (showReplyModal && markResolvedAfterReply)
+    private async Task MarkResolved(CustomerInquiry inquiry)
+    {
+        await UpdateInquiryStatus(inquiry, "Resolved");
+    }
+
+    private async Task SetHighPriority(CustomerInquiry inquiry)
+    {
+        await UpdateInquiryPriority(inquiry, "High");
+    }
+
+    private async Task SetMediumPriority(CustomerInquiry inquiry)
+    {
+        await UpdateInquiryPriority(inquiry, "Medium");
+    }
+
+    private async Task SetLowPriority(CustomerInquiry inquiry)
+    {
+        await UpdateInquiryPriority(inquiry, "Low");
+    }
+
+    private async Task UpdateInquiryStatus(CustomerInquiry inquiry, string newStatus)
+    {
+        try
+        {
+            inquiry.Status = newStatus;
+            inquiry.LastUpdated = DateTime.UtcNow;
+
+            if (string.IsNullOrEmpty(inquiry.AssignedTo) && currentUser != null)
             {
-                selectedInquiry.Status = "resolved";
-            }
-            // Otherwise if it's still open, mark it as in progress
-            else if (selectedInquiry.Status == "open")
-            {
-                selectedInquiry.Status = "inprogress";
+                inquiry.AssignedTo = $"{currentUser.FirstName} {currentUser.LastName}";
             }
 
-            // If not assigned, assign to the current user
-            if (string.IsNullOrEmpty(selectedInquiry.AssignedTo))
-            {
-                selectedInquiry.AssignedTo = "Sales Agent";
-            }
+            await DbContext.SaveChangesAsync();
+            await JSRuntime.InvokeVoidAsync("alert", $"Inquiry #{inquiry.Id} status updated to {GetStatusDisplay(newStatus)}");
 
-            // Close modals and clear inputs
-            replyMessage = "";
-
-            // If we were in the details modal, keep it open to show the new reply
             if (showDetailsModal)
-            {
-                showReplyModal = false;
-            }
-            else
             {
                 CloseModals();
             }
 
             ApplyFilters();
-            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error updating status: {ex.Message}");
         }
     }
 
-    // Create mock data for demonstration
-    private List<CustomerInquiry> CreateMockInquiries()
+    private async Task UpdateInquiryPriority(CustomerInquiry inquiry, string newPriority)
     {
-        return new List<CustomerInquiry>
+        try
         {
-            new CustomerInquiry
-            {
-                Id = 1,
-                CustomerName = "John Smith",
-                CustomerEmail = "john.smith@example.com",
-                BookingId = 1001,
-                Subject = "Booking Modification Request",
-                Message = "I need to change my flight date from July 10 to July 15. Is this possible and what would be the additional cost?",
-                SubmittedDate = DateTime.Now.AddHours(-5),
-                LastUpdated = DateTime.Now.AddHours(-5),
-                Status = "open",
-                Priority = "high",
-                AssignedTo = ""
-            },
-            new CustomerInquiry
-            {
-                Id = 2,
-                CustomerName = "Sarah Johnson",
-                CustomerEmail = "sarah.j@example.com",
-                BookingId = 1002,
-                Subject = "Special Request for Hotel",
-                Message = "I have booked the Rome package and would like to request a room with a view if possible.",
-                SubmittedDate = DateTime.Now.AddDays(-1),
-                LastUpdated = DateTime.Now.AddDays(-1),
-                Status = "inprogress",
-                Priority = "medium",
-                AssignedTo = "Peter Hansen"
-            },
-            new CustomerInquiry
-            {
-                Id = 3,
-                CustomerName = "Michael Rodriguez",
-                CustomerEmail = "miker@example.com",
-                BookingId = 1003,
-                Subject = "Cancellation Policy",
-                Message = "Could you please explain the cancellation policy for my Barcelona trip? I might need to cancel due to work commitments.",
-                SubmittedDate = DateTime.Now.AddDays(-2),
-                LastUpdated = DateTime.Now.AddDays(-1),
-                Status = "resolved",
-                Priority = "low",
-                AssignedTo = "Maria Jensen"
-            },
-            new CustomerInquiry
-            {
-                Id = 4,
-                CustomerName = "Emma Wilson",
-                CustomerEmail = "emma.w@example.com",
-                BookingId = 1004,
-                Subject = "Airport Transfer Question",
-                Message = "Does my Dubai package include airport transfers? If not, how can I add this service?",
-                SubmittedDate = DateTime.Now.AddDays(-3),
-                LastUpdated = DateTime.Now.AddDays(-2),
-                Status = "open",
-                Priority = "medium",
-                AssignedTo = ""
-            },
-            new CustomerInquiry
-            {
-                Id = 5,
-                CustomerName = "David Thompson",
-                CustomerEmail = "david.t@example.com",
-                BookingId = 0,
-                Subject = "Price Inquiry for Family Trip",
-                Message = "I'm planning a family trip to Paris for 4 people (2 adults, 2 children ages 8 and 10) for next summer. Could you provide me with some package options and pricing?",
-                SubmittedDate = DateTime.Now.AddHours(-12),
-                LastUpdated = DateTime.Now.AddHours(-12),
-                Status = "open",
-                Priority = "medium",
-                AssignedTo = ""
-            },
-            new CustomerInquiry
-            {
-                Id = 6,
-                CustomerName = "Jennifer Lee",
-                CustomerEmail = "jennifer.l@example.com",
-                BookingId = 1005,
-                Subject = "Urgent: Visa Assistance",
-                Message = "I just realized my passport expires within 3 months of my trip to Thailand. Will this be a problem? Do I need to renew it before traveling?",
-                SubmittedDate = DateTime.Now.AddHours(-8),
-                LastUpdated = DateTime.Now.AddHours(-8),
-                Status = "inprogress",
-                Priority = "high",
-                AssignedTo = "Maria Jensen"
-            },
-            new CustomerInquiry
-            {
-                Id = 7,
-                CustomerName = "Robert Garcia",
-                CustomerEmail = "robert.g@example.com",
-                BookingId = 1006,
-                Subject = "Dietary Requirements",
-                Message = "I have a severe nut allergy. Can you ensure that the hotels in my booking are informed about this?",
-                SubmittedDate = DateTime.Now.AddDays(-5),
-                LastUpdated = DateTime.Now.AddDays(-4),
-                Status = "resolved",
-                Priority = "high",
-                AssignedTo = "Peter Hansen"
-            },
-            new CustomerInquiry
-            {
-                Id = 8,
-                CustomerName = "Lisa Brown",
-                CustomerEmail = "lisa.b@example.com",
-                BookingId = 0,
-                Subject = "Group Booking Discount",
-                Message = "We are a group of 10 people interested in a trip to Barcelona next spring. Do you offer any group discounts?",
-                SubmittedDate = DateTime.Now.AddDays(-2),
-                LastUpdated = DateTime.Now.AddDays(-2),
-                Status = "open",
-                Priority = "medium",
-                AssignedTo = ""
-            }
-        };
-    }
+            inquiry.Priority = newPriority;
+            inquiry.LastUpdated = DateTime.UtcNow;
 
-    private List<InquiryReply> CreateMockReplies()
-    {
-        return new List<InquiryReply>
+            await DbContext.SaveChangesAsync();
+            await JSRuntime.InvokeVoidAsync("alert", $"Inquiry #{inquiry.Id} priority updated to {newPriority}");
+            ApplyFilters();
+        }
+        catch (Exception ex)
         {
-            new InquiryReply
-            {
-                Id = 1,
-                InquiryId = 2,
-                Message = "Hello Sarah, I'll check with the hotel in Rome about room availability with a view. I'll get back to you as soon as I have information.",
-                ReplyDate = DateTime.Now.AddDays(-1).AddHours(1),
-                SentBy = "Peter Hansen",
-                IsFromCustomer = false
-            },
-            new InquiryReply
-            {
-                Id = 2,
-                InquiryId = 2,
-                Message = "Thank you for checking. I really appreciate it!",
-                ReplyDate = DateTime.Now.AddDays(-1).AddHours(2),
-                SentBy = "Customer",
-                IsFromCustomer = true
-            },
-            new InquiryReply
-            {
-                Id = 3,
-                InquiryId = 3,
-                Message = "Hello Michael, for your Barcelona trip, our cancellation policy allows for a full refund if cancelled 30 days before departure. Within 30 days, there's a 50% cancellation fee, and within 7 days there's no refund. Let me know if you need to proceed with cancellation.",
-                ReplyDate = DateTime.Now.AddDays(-2).AddHours(3),
-                SentBy = "Maria Jensen",
-                IsFromCustomer = false
-            },
-            new InquiryReply
-            {
-                Id = 4,
-                InquiryId = 3,
-                Message = "Thanks for the information. I'll let you know my decision soon.",
-                ReplyDate = DateTime.Now.AddDays(-1).AddHours(4),
-                SentBy = "Customer",
-                IsFromCustomer = true
-            },
-            new InquiryReply
-            {
-                Id = 5,
-                InquiryId = 6,
-                Message = "Hello Jennifer, this is indeed urgent. Most countries require that your passport is valid for at least 6 months beyond your travel dates. I recommend renewing your passport as soon as possible. Would you like me to provide information about expedited passport services?",
-                ReplyDate = DateTime.Now.AddHours(-7),
-                SentBy = "Maria Jensen",
-                IsFromCustomer = false
-            },
-            new InquiryReply
-            {
-                Id = 6,
-                InquiryId = 7,
-                Message = "Hello Robert, I've noted your nut allergy in your booking and have informed all hotels. They have confirmed they can accommodate this requirement. I recommend also mentioning this at check-in for each accommodation.",
-                ReplyDate = DateTime.Now.AddDays(-4).AddHours(2),
-                SentBy = "Peter Hansen",
-                IsFromCustomer = false
-            },
-            new InquiryReply
-            {
-                Id = 7,
-                InquiryId = 7,
-                Message = "Thank you for taking care of this. I appreciate your attention to this important detail.",
-                ReplyDate = DateTime.Now.AddDays(-4).AddHours(4),
-                SentBy = "Customer",
-                IsFromCustomer = true
-            }
-        };
+            await JSRuntime.InvokeVoidAsync("alert", $"Error updating priority: {ex.Message}");
+        }
     }
 }

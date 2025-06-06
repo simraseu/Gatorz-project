@@ -30,5 +30,8 @@ namespace Gotorz.Models
         public string Priority { get; set; } = "Medium";
         public string? AssignedTo { get; set; }
         public string? Category { get; set; }
+        public string? AgentReply { get; set; }
+        public DateTime? ReplyDate { get; set; }
+        public string? RepliedBy { get; set; }
     }
 }

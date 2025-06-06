@@ -57,7 +57,7 @@
                 </div>
                 <div class="card-body d-flex flex-column">
                     <p>View and manage your travel bookings.</p>
-                    
+
                     @if (recentBookings.Any())
                     {
                         <div class="list-group mb-3">
@@ -82,7 +82,7 @@
                             <p class="mb-0">You don't have any bookings yet.</p>
                         </div>
                     }
-                    
+
                     <div class="mt-auto">
                         <a href="/customer/bookings" class="btn btn-primary me-2">View All Bookings</a>
                         <a href="/search" class="btn btn-outline-primary">Find a Trip</a>
@@ -91,6 +91,83 @@
             </div>
         </div>
 
+        <!-- Support Inquiries -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">My Support Inquiries</h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    @if (customerInquiries.Any())
+                    {
+                        <div class="mb-3" style="max-height: 400px; overflow-y: auto;">
+                            @foreach (var inquiry in customerInquiries)
+                            {
+                                <div class="card mb-3 @(inquiry.Status == "Resolved" ? "border-success" : inquiry.Status == "InProgress" ? "border-warning" : "border-info")">
+                                    <div class="card-header d-flex justify-content-between">
+                                        <div>
+                                            <strong>@inquiry.Subject</strong>
+                                            <span class="badge bg-@GetInquiryStatusColor(inquiry.Status) ms-2">@inquiry.Status</span>
+                                        </div>
+                                        <small class="text-muted">@inquiry.SubmittedDate.ToString("MMM d, yyyy")</small>
+                                    </div>
+                                    <div class="card-body">
+                                        <!-- Original Message -->
+                                        <div class="mb-3">
+                                            <h6>Your Message:</h6>
+                                            <p class="bg-light p-2 rounded small">
+                                                @(inquiry.Message.Length > 100 ? inquiry.Message.Substring(0, 100) + "..." : inquiry.Message)
+                                            </p>
+                                        </div>
+
+                                        <!-- Agent Reply -->
+                                        @if (!string.IsNullOrEmpty(inquiry.AgentReply))
+                                        {
+                                            <div class="border-top pt-3">
+                                                <h6 class="text-primary">
+                                                    <i class="bi bi-reply"></i> Support Team Reply:
+                                                    @if (inquiry.ReplyDate.HasValue)
+                                                    {
+                                                        <small class="text-muted">(@inquiry.ReplyDate.Value.ToString("MMM d, yyyy HH:mm"))</small>
+                                                    }
+                                                </h6>
+                                                <div class="bg-primary bg-opacity-10 p-3 rounded">
+                                                    <p class="mb-0 small" style="white-space: pre-wrap;">@inquiry.AgentReply</p>
+                                                    @if (!string.IsNullOrEmpty(inquiry.RepliedBy))
+                                                    {
+                                                        <small class="text-muted d-block mt-2">- @inquiry.RepliedBy</small>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                        else if (inquiry.Status != "Open")
+                                        {
+                                            <div class="alert alert-info small">
+                                                <i class="bi bi-clock"></i> Our support team is working on your inquiry.
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <i class="bi bi-chat-square-text fs-1 text-muted"></i>
+                            <p class="text-muted mt-2">You haven't submitted any support inquiries yet.</p>
+                        </div>
+                    }
+
+                    <div class="mt-auto">
+                        <a href="/customer/support" class="btn btn-primary">Contact Support</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
         <!-- Account Settings -->
         <div class="col-md-6 mb-4">
             <div class="card h-100">
@@ -99,7 +176,7 @@
                 </div>
                 <div class="card-body d-flex flex-column">
                     <p>Update your personal information and preferences.</p>
-                    
+
                     <ul class="list-group mb-3">
                         <li class="list-group-item">
                             <strong>Email:</strong> @email
@@ -108,11 +185,11 @@
                             <strong>Name:</strong> @firstName @lastName
                         </li>
                         <li class="list-group-item">
-                            <strong>Member Status:</strong> 
+                            <strong>Member Status:</strong>
                             <span class="badge bg-primary">@GetMemberStatus()</span>
                         </li>
                     </ul>
-                    
+
                     <div class="mt-auto">
                         <a href="/Account/Manage" class="btn btn-primary">Update Profile</a>
                         <a href="/Account/Manage/ChangePassword" class="btn btn-outline-secondary ms-2">Change Password</a>
@@ -120,44 +197,32 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    <div class="row mt-4">
         <!-- Special Offers -->
-        <div class="col-12">
-            <div class="card">
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
                 <div class="card-header bg-light">
                     <h5 class="mb-0">Special Offers For You</h5>
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <div class="card special-offer h-100">
-                                <div class="special-offer-img" style="background-image: url('/images/barcelona.jpg')"></div>
-                                <div class="card-body">
-                                    <h5 class="card-title">Barcelona Weekend</h5>
-                                    <p class="card-text">3 nights in Barcelona with flights from $599</p>
+                        <div class="col-12 mb-3">
+                            <div class="card special-offer">
+                                <div class="special-offer-img" style="background-image: url('/images/barcelona.jpg'); height: 120px;"></div>
+                                <div class="card-body p-3">
+                                    <h6 class="card-title">Barcelona Weekend</h6>
+                                    <p class="card-text small">3 nights in Barcelona with flights from $599</p>
                                     <a href="/search?destination=Barcelona" class="btn btn-sm btn-primary">See Details</a>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <div class="card special-offer h-100">
-                                <div class="special-offer-img" style="background-image: url('/images/rome.jpg')"></div>
-                                <div class="card-body">
-                                    <h5 class="card-title">Roman Holiday</h5>
-                                    <p class="card-text">5 nights in Rome with flights from $899</p>
+                        <div class="col-12 mb-3">
+                            <div class="card special-offer">
+                                <div class="special-offer-img" style="background-image: url('/images/rome.jpg'); height: 120px;"></div>
+                                <div class="card-body p-3">
+                                    <h6 class="card-title">Roman Holiday</h6>
+                                    <p class="card-text small">5 nights in Rome with flights from $899</p>
                                     <a href="/search?destination=Rome" class="btn btn-sm btn-primary">See Details</a>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <div class="card special-offer h-100">
-                                <div class="special-offer-img" style="background-image: url('/images/dubai.jpg')"></div>
-                                <div class="card-body">
-                                    <h5 class="card-title">Luxury Dubai</h5>
-                                    <p class="card-text">7 nights in Dubai with flights from $1,299</p>
-                                    <a href="/search?destination=Dubai" class="btn btn-sm btn-primary">See Details</a>
                                 </div>
                             </div>
                         </div>
@@ -171,7 +236,7 @@
 @code {
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
-    
+
     private string firstName = "Guest";
     private string lastName = "";
     private string email = "";
@@ -179,6 +244,7 @@
     private int upcomingTrips = 0;
     private int memberSince = 0;
     private List<Booking> recentBookings = new();
+    private List<CustomerInquiry> customerInquiries = new List<CustomerInquiry>();
 
     protected override async Task OnInitializedAsync()
     {
@@ -191,21 +257,27 @@
                 firstName = currentUser.FirstName;
                 lastName = currentUser.LastName;
                 email = currentUser.Email;
-                
+
                 // Calculate days since registration
                 memberSince = (int)(DateTime.Now - currentUser.ProfileCreated).TotalDays;
-                
-                // In a real application, you'd load the actual bookings for this user
-                // This is simplified for demo purposes
+
+                // Load bookings (simplified for demo purposes)
                 recentBookings = await DbContext.Bookings
                     .Include(b => b.TravelPackages)
                     .Where(b => b.UserId == 1) // Simplified - using a dummy user ID
                     .OrderByDescending(b => b.BookingDate)
                     .Take(3)
                     .ToListAsync();
-                    
+
+                // Load customer inquiries
+                customerInquiries = await DbContext.CustomerInquiries
+                    .Where(i => i.CustomerEmail == currentUser.Email)
+                    .OrderByDescending(i => i.SubmittedDate)
+                    .Take(5) // Limit to 5 most recent
+                    .ToListAsync();
+
                 totalBookings = recentBookings.Count;
-                
+
                 // Count upcoming trips
                 upcomingTrips = recentBookings
                     .Count(b => b.TravelPackages.Any(tp => tp.StartDate >= DateTime.Now));
@@ -222,16 +294,16 @@
     {
         if (booking?.TravelPackages == null || !booking.TravelPackages.Any())
             return "Unknown Destination";
-            
+
         // If there are multiple destinations, list them
         if (booking.TravelPackages.Count > 1)
         {
             return $"{booking.TravelPackages.First().Destination} + {booking.TravelPackages.Count - 1} more";
         }
-        
+
         return booking.TravelPackages.First().Destination;
     }
-    
+
     private string GetMemberStatus()
     {
         // Simple logic based on time as a member
@@ -241,5 +313,16 @@
             return "Silver";
         else
             return "Bronze";
+    }
+
+    private string GetInquiryStatusColor(string status)
+    {
+        return status switch
+        {
+            "Open" => "warning",
+            "InProgress" => "primary",
+            "Resolved" => "success",
+            _ => "secondary"
+        };
     }
 }
