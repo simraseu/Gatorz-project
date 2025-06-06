@@ -34,7 +34,7 @@ OBS! Bemærk det er Amadeus-API branchen der skal benyttes og ikke master.
 Man kan registrere sig som bruger(customer),
 eller man kan indtaste følgende for at logge ind som Admin.
 
-Email:    admin@gatorz.com
+Email:    admin@Gotorz.com
 Password: Admin123!
 
 
