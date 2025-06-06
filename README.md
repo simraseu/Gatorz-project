@@ -11,10 +11,7 @@ Admin, SalesAgent og Customer, som har hver især deres egne funktioner som de k
 * Hosting: Azure
 
 --Opsætningsvejledning--
-OBS! Bemærk det er Amadeus-API branchen der skal benyttes og ikke master.
-*Git: git clone https://github.com/simraseu/Gotorz-project.git
-      cd Gotorz-project
-      git checkout Amadeus-API
+
       
 *NuGet: Microsoft.AspNetCore.Components.WebAssembly.Server
         Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore
