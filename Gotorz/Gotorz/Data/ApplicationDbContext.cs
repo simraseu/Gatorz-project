@@ -19,6 +19,7 @@ namespace Gotorz.Data
         public DbSet<HotelInfo> HotelInfos { get; set; }
         public DbSet<ChatMessage> ChatMessages { get; set; }
         public DbSet<ActivityLog> ActivityLogs { get; set; }
+        public DbSet<CustomerInquiry> CustomerInquiries { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

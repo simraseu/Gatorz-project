@@ -1,0 +1,246 @@
+﻿@page "/customer/support"
+@page "/customer/support/{BookingId:int?}"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Gotorz.Data
+@using Gotorz.Models
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize(Roles = "Customer")]
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext DbContext
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<PageTitle>Contact Support - Gotorz</PageTitle>
+
+<div class="container py-4">
+    <h1>Contact Customer Support</h1>
+    <p class="lead">Have a question or need help with your booking? We're here to help!</p>
+
+    @if (showSuccessMessage)
+    {
+        <div class="alert alert-success">
+            <h4><i class="bi bi-check-circle"></i> Inquiry Submitted Successfully!</h4>
+            <p>Thank you for contacting us. We'll respond within 24 hours.</p>
+            <p>Your inquiry ID is: <strong>#@newInquiryId</strong></p>
+            <div class="mt-3">
+                <a href="/customer/dashboard" class="btn btn-primary">Return to Dashboard</a>
+                <button class="btn btn-outline-primary" @onclick="ResetForm">Submit Another Inquiry</button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-envelope"></i> New Support Request</h5>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="inquiry" OnValidSubmit="SubmitInquiry">
+                            <DataAnnotationsValidator />
+
+                            <div class="mb-3">
+                                <label class="form-label">Category *</label>
+                                <select class="form-select" @bind="inquiry.Category" required>
+                                    <option value="">Select a category</option>
+                                    <option value="Booking">Booking Questions</option>
+                                    <option value="Payment">Payment Issues</option>
+                                    <option value="Travel">Travel Information</option>
+                                    <option value="Cancellation">Cancellation Request</option>
+                                    <option value="Modification">Booking Modification</option>
+                                    <option value="General">General Question</option>
+                                    <option value="Technical">Technical Support</option>
+                                </select>
+                                <ValidationMessage For="() => inquiry.Category" class="text-danger" />
+                            </div>
+
+                            @if (BookingId.HasValue)
+                            {
+                                <div class="mb-3">
+                                    <label class="form-label">Related Booking</label>
+                                    <input type="text" class="form-control" value="Booking #@BookingId" readonly />
+                                    <small class="text-muted">This inquiry will be linked to your booking.</small>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="mb-3">
+                                    <label class="form-label">Booking ID (Optional)</label>
+                                    <input type="number" class="form-control" @bind="inquiry.BookingId"
+                                           placeholder="Enter booking ID if this relates to a specific booking" />
+                                    <small class="text-muted">Leave empty if this is a general question.</small>
+                                </div>
+                            }
+
+                            <div class="mb-3">
+                                <label class="form-label">Priority</label>
+                                <select class="form-select" @bind="inquiry.Priority">
+                                    <option value="Low">Low - General question</option>
+                                    <option value="Medium" selected>Medium - Standard inquiry</option>
+                                    <option value="High">High - Urgent issue</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Subject *</label>
+                                <input type="text" class="form-control" @bind="inquiry.Subject"
+                                       placeholder="Brief description of your question" required maxlength="200" />
+                                <ValidationMessage For="() => inquiry.Subject" class="text-danger" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Message *</label>
+                                <textarea class="form-control" rows="6" @bind="inquiry.Message"
+                                          placeholder="Please provide detailed information about your question or issue..."
+                                          required maxlength="2000"></textarea>
+                                <small class="text-muted">@(inquiry.Message?.Length ?? 0) / 2000 characters</small>
+                                <ValidationMessage For="() => inquiry.Message" class="text-danger" />
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" @bind="agreeToTerms" id="agreeTerms" required />
+                                    <label class="form-check-label" for="agreeTerms">
+                                        I understand that my inquiry will be handled according to our privacy policy *
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                <button type="button" class="btn btn-outline-secondary" @onclick="CancelForm">Cancel</button>
+                                <button type="submit" class="btn btn-primary" disabled="@(isSubmitting || !agreeToTerms)">
+                                    @if (isSubmitting)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                        <span>Submitting...</span>
+                                    }
+                                    else
+                                    {
+                                        <span><i class="bi bi-send"></i> Submit Inquiry</span>
+                                    }
+                                </button>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-info-circle"></i> Contact Information</h6>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Response Time:</strong> Within 24 hours</p>
+                        <p><strong>Email:</strong> support@gotorz.com</p>
+                        <p><strong>Phone:</strong> +1-800-GOTORZ-1</p>
+                        <p><strong>Hours:</strong> Mon-Fri 9AM-6PM EST</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-question-circle"></i> Quick Help</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <strong>Booking Issues:</strong>
+                            <small class="d-block text-muted">Cancel or modify bookings</small>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Payment Problems:</strong>
+                            <small class="d-block text-muted">Billing questions or refunds</small>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Travel Info:</strong>
+                            <small class="d-block text-muted">Destination details or requirements</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int? BookingId { get; set; }
+
+    private CustomerInquiry inquiry = new CustomerInquiry();
+    private ApplicationUser? currentUser;
+    private bool isSubmitting = false;
+    private bool showSuccessMessage = false;
+    private bool agreeToTerms = false;
+    private int newInquiryId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUser = await UserManager.GetUserAsync(authState.User);
+
+        if (currentUser != null)
+        {
+            inquiry.CustomerId = currentUser.Id;
+            inquiry.CustomerName = $"{currentUser.FirstName} {currentUser.LastName}";
+            inquiry.CustomerEmail = currentUser.Email ?? "";
+
+            if (BookingId.HasValue)
+            {
+                inquiry.BookingId = BookingId.Value;
+            }
+        }
+    }
+
+    private async Task SubmitInquiry()
+    {
+        if (!agreeToTerms || currentUser == null)
+            return;
+
+        try
+        {
+            isSubmitting = true;
+
+            inquiry.SubmittedDate = DateTime.UtcNow;
+            inquiry.LastUpdated = DateTime.UtcNow;
+            inquiry.Status = "Open";
+
+            DbContext.CustomerInquiries.Add(inquiry);
+            await DbContext.SaveChangesAsync();
+
+            newInquiryId = inquiry.Id;
+            showSuccessMessage = true;
+
+            await JSRuntime.InvokeVoidAsync("scrollTo", 0, 0);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error submitting inquiry: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        inquiry = new CustomerInquiry
+        {
+            CustomerId = currentUser?.Id ?? "",
+            CustomerName = currentUser != null ? $"{currentUser.FirstName} {currentUser.LastName}" : "",
+            CustomerEmail = currentUser?.Email ?? ""
+        };
+        agreeToTerms = false;
+        showSuccessMessage = false;
+    }
+
+    private void CancelForm()
+    {
+        NavigationManager.NavigateTo("/customer/dashboard");
+    }
+}
