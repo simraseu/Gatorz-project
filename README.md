@@ -10,6 +10,8 @@ Admin, SalesAgent og Customer, som har hver især deres egne funktioner som de k
 * Authentication: ASP.NET Core Identity
 * Hosting: Azure
 
+deployed url: https://gotorz-travel-team-16-h9fjamhbbhg3ebfa.northeurope-01.azurewebsites.net/
+
 --Opsætningsvejledning--
 
       
