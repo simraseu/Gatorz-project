@@ -6,7 +6,7 @@ name: Build and deploy ASP.Net Core app to Azure Web App - Gotorz-travel-team-16
 on:
   push:
     branches:
-      - Amadeus-API
+      - main
   workflow_dispatch:
 
 jobs:
