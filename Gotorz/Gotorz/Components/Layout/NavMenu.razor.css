@@ -11,10 +11,12 @@
     font-size: 1.1rem;
 }
 
+/* Icon styling improvements */
 .bi {
     display: inline-block;
     width: 1.25rem;
     margin-right: 0.5rem;
+    text-align: center;
 }
 
 .nav-item {
@@ -46,6 +48,50 @@
     .nav-item-header:hover {
         background-color: rgba(255,255,255,0.1);
         color: white;
+    }
+
+    /* Icon spacing for header items */
+    .nav-item-header i:not(.ms-auto) {
+        display: inline-block;
+        width: 1.25rem;
+        margin-right: 0.5rem;
+        text-align: center;
+    }
+
+    /* Chevron icons */
+    .nav-item-header .ms-auto {
+        margin-left: auto !important;
+        font-size: 0.8rem;
+    }
+
+/* Regular nav links */
+.nav-link {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+    color: #d7d7d7;
+    text-decoration: none;
+}
+
+    .nav-link:hover {
+        background-color: rgba(255,255,255,0.1);
+        color: white;
+        text-decoration: none;
+    }
+
+    .nav-link.active {
+        background-color: rgba(255,255,255,0.25);
+        color: white;
+    }
+
+    /* Icon spacing for nav links */
+    .nav-link i {
+        display: inline-block;
+        width: 1.25rem;
+        margin-right: 0.5rem;
+        text-align: center;
     }
 
 /* Submenu Styling */
@@ -81,6 +127,30 @@
             background-color: rgba(255,255,255,0.25);
             color: white;
         }
+
+/* Logout button styling */
+.nav-link button {
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    color: inherit;
+    font-size: inherit;
+    padding: 0;
+    display: flex;
+    align-items: center;
+}
+
+    .nav-link button:hover {
+        color: inherit;
+    }
+
+    .nav-link button i {
+        display: inline-block;
+        width: 1.25rem;
+        margin-right: 0.5rem;
+        text-align: center;
+    }
 
 .nav-scrollable {
     display: none;
