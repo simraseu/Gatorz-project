@@ -1,10 +1,13 @@
 ﻿@page "/admin/users"
 @using Microsoft.AspNetCore.Identity
 @using Gotorz.Data
+@using Gotorz.Services
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Roles = "Admin")]
 @inject UserManager<ApplicationUser> UserManager
 @inject RoleManager<IdentityRole> RoleManager
+@inject ICustomerMessageService CustomerMessageService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @rendermode InteractiveServer
 
 <PageTitle>User Management - Gotorz</PageTitle>
@@ -48,7 +51,11 @@
                                 }
                             </td>
                             <td>
-                                <button class="btn btn-primary btn-sm" @onclick="() => ShowRoleModal(user)">Manage Roles</button>
+                                <div class="btn-group">
+                                    <button class="btn btn-primary btn-sm" @onclick="() => ShowRoleModal(user)">Manage Roles</button>
+                                    <button class="btn btn-warning btn-sm" @onclick="() => ShowPasswordResetModal(user)">Reset Password</button>
+                                    <button class="btn btn-info btn-sm" @onclick="() => ShowMessageModal(user)">Send Message</button>
+                                </div>
                             </td>
                         </tr>
                     }
@@ -57,6 +64,7 @@
         </div>
     }
 
+    <!-- Role Management Modal (existing) -->
     @if (showRoleModal && selectedUser != null)
     {
         <div class="modal fade show" style="display: block;" tabindex="-1" role="dialog">
@@ -64,7 +72,7 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <h5 class="modal-title">Manage Roles for @selectedUser.Email</h5>
-                        <button type="button" class="btn-close" @onclick="CloseRoleModal"></button>
+                        <button type="button" class="btn-close" @onclick="CloseModals"></button>
                     </div>
                     <div class="modal-body">
                         @if (roleError != null)
@@ -92,8 +100,125 @@
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" @onclick="CloseRoleModal">Close</button>
+                        <button type="button" class="btn btn-secondary" @onclick="CloseModals">Close</button>
                         <button type="button" class="btn btn-primary" @onclick="SaveRoles">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop fade show"></div>
+    }
+
+    <!-- Password Reset Modal (NEW) -->
+    @if (showPasswordResetModal && selectedUser != null)
+    {
+        <div class="modal fade show" style="display: block;" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Reset Password for @selectedUser.FirstName @selectedUser.LastName</h5>
+                        <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (passwordResetError != null)
+                        {
+                            <div class="alert alert-danger">@passwordResetError</div>
+                        }
+
+                        @if (passwordResetSuccess != null)
+                        {
+                            <div class="alert alert-success">@passwordResetSuccess</div>
+                        }
+
+                        <div class="alert alert-warning">
+                            <h6>Warning</h6>
+                            <p>This will generate a new temporary password and send it to the user via our messaging system.</p>
+                            <p>The user will be required to change this password on their next login.</p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">User Email</label>
+                            <input type="email" class="form-control" value="@selectedUser.Email" disabled />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Reason for Reset</label>
+                            <textarea class="form-control" rows="3" @bind="passwordResetReason"
+                                      placeholder="Enter the reason for this password reset..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseModals">Cancel</button>
+                        <button type="button" class="btn btn-warning" @onclick="ResetUserPassword" disabled="@isResettingPassword">
+                            @if (isResettingPassword)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            Reset Password & Send Message
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop fade show"></div>
+    }
+
+    <!-- Send Message Modal (NEW) -->
+    @if (showMessageModal && selectedUser != null)
+    {
+        <div class="modal fade show" style="display: block;" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Send Message to @selectedUser.FirstName @selectedUser.LastName</h5>
+                        <button type="button" class="btn-close" @onclick="CloseModals"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (messageError != null)
+                        {
+                            <div class="alert alert-danger">@messageError</div>
+                        }
+
+                        @if (messageSuccess != null)
+                        {
+                            <div class="alert alert-success">@messageSuccess</div>
+                        }
+
+                        <div class="mb-3">
+                            <label class="form-label">Recipient</label>
+                            <input type="email" class="form-control" value="@selectedUser.Email" disabled />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Message Type</label>
+                            <select class="form-select" @bind="messageType">
+                                <option value="General">General Communication</option>
+                                <option value="SystemNotification">System Notification</option>
+                                <option value="Support">Support Message</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Subject</label>
+                            <input type="text" class="form-control" @bind="messageSubject"
+                                   placeholder="Enter message subject..." />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Message</label>
+                            <textarea class="form-control" rows="5" @bind="messageContent"
+                                      placeholder="Enter your message..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseModals">Cancel</button>
+                        <button type="button" class="btn btn-primary" @onclick="SendMessage" disabled="@isSendingMessage">
+                            @if (isSendingMessage)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            Send Message
+                        </button>
                     </div>
                 </div>
             </div>
@@ -108,10 +233,29 @@
     private List<string> availableRoles = new();
     private ApplicationUser selectedUser;
     private Dictionary<string, bool> selectedRoles = new();
+
+    // Modal controls
     private bool showRoleModal = false;
+    private bool showPasswordResetModal = false;
+    private bool showMessageModal = false;
+
     private string searchTerm = "";
     private string roleError;
     private string roleSuccess;
+
+    // Password reset properties (NEW)
+    private string passwordResetError;
+    private string passwordResetSuccess;
+    private string passwordResetReason = "";
+    private bool isResettingPassword = false;
+
+    // Message properties (NEW)
+    private string messageError;
+    private string messageSuccess;
+    private string messageType = "General";
+    private string messageSubject = "";
+    private string messageContent = "";
+    private bool isSendingMessage = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -135,14 +279,12 @@
                 (u.FirstName + " " + u.LastName).Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
                 u.Email.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
 
+    // Existing role management methods (keep as they are)
     private void ShowRoleModal(ApplicationUser user)
     {
         selectedUser = user;
-
-        // Reset selected roles
         selectedRoles.Clear();
 
-        // Initialize with current roles
         if (userRoles.ContainsKey(user.Id))
         {
             foreach (var role in availableRoles)
@@ -154,11 +296,6 @@
         showRoleModal = true;
         roleError = null;
         roleSuccess = null;
-    }
-
-    private void CloseRoleModal()
-    {
-        showRoleModal = false;
     }
 
     private bool IsInRole(string userId, string role)
@@ -179,10 +316,8 @@
 
         try
         {
-            // Get current roles
             var currentRoles = await UserManager.GetRolesAsync(selectedUser);
 
-            // Roles to remove
             var rolesToRemove = currentRoles.Where(r => !selectedRoles.ContainsKey(r) || !selectedRoles[r]).ToList();
             if (rolesToRemove.Any())
             {
@@ -194,7 +329,6 @@
                 }
             }
 
-            // Roles to add
             var rolesToAdd = selectedRoles.Where(kvp => kvp.Value && !currentRoles.Contains(kvp.Key)).Select(kvp => kvp.Key).ToList();
             if (rolesToAdd.Any())
             {
@@ -206,14 +340,185 @@
                 }
             }
 
-            // Update userRoles dictionary
             userRoles[selectedUser.Id] = selectedRoles.Where(kvp => kvp.Value).Select(kvp => kvp.Key).ToList();
-
             roleSuccess = "Roles updated successfully!";
         }
         catch (Exception ex)
         {
             roleError = "An error occurred: " + ex.Message;
         }
+    }
+
+    // NEW: Password reset methods
+    private void ShowPasswordResetModal(ApplicationUser user)
+    {
+        selectedUser = user;
+        showPasswordResetModal = true;
+        passwordResetError = null;
+        passwordResetSuccess = null;
+        passwordResetReason = "";
+    }
+
+    private async Task ResetUserPassword()
+    {
+        passwordResetError = null;
+        passwordResetSuccess = null;
+        isResettingPassword = true;
+
+        try
+        {
+            // Generate temporary password
+            var tempPassword = GenerateTemporaryPassword();
+
+            // Reset the user's password
+            var token = await UserManager.GeneratePasswordResetTokenAsync(selectedUser);
+            var result = await UserManager.ResetPasswordAsync(selectedUser, token, tempPassword);
+
+            if (!result.Succeeded)
+            {
+                passwordResetError = "Failed to reset password: " + string.Join(", ", result.Errors.Select(e => e.Description));
+                return;
+            }
+
+            // Get current admin user
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var currentUser = await UserManager.GetUserAsync(authState.User);
+
+            if (currentUser == null)
+            {
+                passwordResetError = "Unable to identify current admin user.";
+                return;
+            }
+
+            // Send password reset message
+            await CustomerMessageService.SendPasswordResetAsync(
+                currentUser.Id,
+                selectedUser.Email,
+                tempPassword
+            );
+
+            passwordResetSuccess = "Password reset successfully! A message with the temporary password has been sent to the user.";
+        }
+        catch (Exception ex)
+        {
+            passwordResetError = "An error occurred: " + ex.Message;
+        }
+        finally
+        {
+            isResettingPassword = false;
+        }
+    }
+
+    private string GenerateTemporaryPassword()
+    {
+        // Generate a secure temporary password with special characters
+        var random = new Random();
+        var letters = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz";
+        var numbers = "23456789";
+        var specialChars = "!@#$%&*";
+
+        // Ensure we have at least one of each required type
+        var password = new List<char>
+    {
+        letters[random.Next(letters.Length)],        // At least one letter
+        letters.ToLower()[random.Next(letters.Length)], // At least one lowercase
+        numbers[random.Next(numbers.Length)],        // At least one number
+        specialChars[random.Next(specialChars.Length)] // At least one special char
+    };
+
+        // Fill the rest with random characters from all sets
+        var allChars = letters + numbers + specialChars;
+        for (int i = 4; i < 12; i++)
+        {
+            password.Add(allChars[random.Next(allChars.Length)]);
+        }
+
+        // Shuffle the password
+        for (int i = password.Count - 1; i > 0; i--)
+        {
+            int j = random.Next(i + 1);
+            (password[i], password[j]) = (password[j], password[i]);
+        }
+
+        return new string(password.ToArray());
+    }
+
+    // Message sending methods
+    private void ShowMessageModal(ApplicationUser user)
+    {
+        selectedUser = user;
+        showMessageModal = true;
+        messageError = null;
+        messageSuccess = null;
+        messageSubject = "";
+        messageContent = "";
+        messageType = "General";
+    }
+
+    private async Task SendMessage()
+    {
+        messageError = null;
+        messageSuccess = null;
+        isSendingMessage = true;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(messageSubject) || string.IsNullOrWhiteSpace(messageContent))
+            {
+                messageError = "Subject and message content are required.";
+                return;
+            }
+
+            // Get current admin user
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var currentUser = await UserManager.GetUserAsync(authState.User);
+
+            if (currentUser == null)
+            {
+                messageError = "Unable to identify current admin user.";
+                return;
+            }
+
+            // Parse message type enum
+            if (!Enum.TryParse<Gotorz.Models.MessageType>(messageType, out var msgType))
+            {
+                msgType = Gotorz.Models.MessageType.General;
+            }
+
+            // Send the message
+            await CustomerMessageService.SendMessageAsync(
+                currentUser.Id,
+                selectedUser.Email,
+                messageSubject,
+                messageContent,
+                msgType
+            );
+
+            messageSuccess = "Message sent successfully!";
+            messageSubject = "";
+            messageContent = "";
+        }
+        catch (Exception ex)
+        {
+            messageError = "An error occurred: " + ex.Message;
+        }
+        finally
+        {
+            isSendingMessage = false;
+        }
+    }
+
+    private void CloseModals()
+    {
+        showRoleModal = false;
+        showPasswordResetModal = false;
+        showMessageModal = false;
+        selectedUser = null;
+        roleError = null;
+        roleSuccess = null;
+        passwordResetError = null;
+        passwordResetSuccess = null;
+        messageError = null;
+        messageSuccess = null;
     }
 }

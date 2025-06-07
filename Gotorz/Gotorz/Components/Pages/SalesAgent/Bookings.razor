@@ -2,9 +2,16 @@
 @using Microsoft.AspNetCore.Authorization
 @using Gotorz.Data
 @using Microsoft.EntityFrameworkCore
+@using Gotorz.Services
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ICustomerMessageService CustomerMessageService
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @attribute [Authorize(Roles = "SalesAgent,Admin")]
 @inject ApplicationDbContext DbContext
 @inject NavigationManager NavigationManager
+@rendermode InteractiveServer
 
 <PageTitle>Manage Bookings - Gotorz</PageTitle>
 
@@ -16,14 +23,14 @@
         <div class="col-md-6">
             <div class="input-group">
                 <input type="text" class="form-control" placeholder="Search by booking ID, customer name, or destination" 
-                       @bind="searchTerm" @bind:event="oninput" />
+                       @bind="searchTerm" @bind:event="oninput" @bind:after="ApplyFilters" />
                 <button class="btn btn-primary" type="button" @onclick="ApplyFilters">
                     <i class="bi bi-search"></i> Search
                 </button>
             </div>
         </div>
         <div class="col-md-3">
-            <select class="form-select" @bind="statusFilter">
+            <select class="form-select" @bind="statusFilter" @bind:after="ApplyFilters">
                 <option value="">All Statuses</option>
                 <option value="Confirmed">Confirmed</option>
                 <option value="Pending">Pending</option>
@@ -31,7 +38,7 @@
             </select>
         </div>
         <div class="col-md-3">
-            <select class="form-select" @bind="dateFilter">
+            <select class="form-select" @bind="dateFilter" @bind:after="ApplyFilters">
                 <option value="all">All Time</option>
                 <option value="today">Today</option>
                 <option value="week">This Week</option>
@@ -83,7 +90,7 @@
                     {
                         <tr>
                             <td>@booking.Id</td>
-                            <td>Customer ID: @booking.UserId</td>
+                            <td>@GetCustomerInfo(booking)</td>
                             <td>@GetDestinationName(booking)</td>
                             <td>@booking.BookingDate.ToString("MM/dd/yyyy")</td>
                             <td>@GetTravelDates(booking)</td>
@@ -94,8 +101,8 @@
                             <td>
                                 <div class="btn-group">
                                     <a href="/sales/booking/@booking.Id" class="btn btn-sm btn-primary">View</a>
-                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowStatusModal(booking)">Status</button>
-                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowNotificationModal(booking)">Notify</button>
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowStatusModal(booking)" @onclick:stopPropagation="true">Status</button>
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowNotificationModal(booking)" @onclick:stopPropagation="true">Notify</button>
                                 </div>
                             </td>
                         </tr>
@@ -139,7 +146,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Comment</label>
-                        <textarea class="form-control" rows="3" placeholder="Add a comment about this status change (optional)"></textarea>
+                        <textarea class="form-control" rows="3" placeholder="Add a comment about this status change (optional)" @bind="statusComment"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -164,11 +171,11 @@
                 <div class="modal-body">
                     <p>Send notification to customer for Booking #@selectedBooking.Id - @GetDestinationName(selectedBooking)</p>
                     <div class="mb-3">
-                        <label class="form-label">Notification Type</label>
+                        <label class="form-label">Message Type</label>
                         <select class="form-select" @bind="notificationType">
-                            <option value="email">Email</option>
-                            <option value="sms">SMS</option>
-                            <option value="both">Email & SMS</option>
+                            <option value="General">General Communication</option>
+                            <option value="SystemNotification">System Notification</option>
+                            <option value="Support">Support Message</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -183,6 +190,22 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="CloseModals">Cancel</button>
                     <button type="button" class="btn btn-primary" @onclick="SendNotification">Send Notification</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@if (showNotificationSuccess)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center py-4">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                    <h4 class="mt-3 text-success">Message Sent Successfully!</h4>
+                    <p class="text-muted">Your notification has been delivered.</p>
                 </div>
             </div>
         </div>
@@ -211,9 +234,14 @@
     private bool showStatusModal = false;
     private bool showNotificationModal = false;
     private string newStatus = "Confirmed";
-    private string notificationType = "email";
+    private string statusComment = "";
+    private string notificationType = "General";
     private string notificationSubject = "";
     private string notificationMessage = "";
+    private bool showNotificationSuccess = false;
+
+    // Customer info cache
+    private Dictionary<int, string> customerInfoCache = new Dictionary<int, string>();
 
     protected override async Task OnInitializedAsync()
     {
@@ -226,6 +254,9 @@
                 .Include(b => b.TravelPackages)
                 .OrderByDescending(b => b.BookingDate)
                 .ToListAsync();
+
+            // Preload customer information for all bookings
+            await LoadCustomerInfoAsync();
                 
             // Apply initial filtering
             ApplyFilters();
@@ -243,6 +274,37 @@
             isLoading = false;
         }
     }
+
+    private async Task LoadCustomerInfoAsync()
+    {
+        customerInfoCache.Clear();
+        
+        foreach (var booking in allBookings)
+        {
+            try
+            {
+                var customer = await UserManager.FindByIdAsync(booking.UserId.ToString());
+                if (customer != null)
+                {
+                    customerInfoCache[booking.UserId] = $"{customer.FirstName} {customer.LastName} ({customer.Email})";
+                }
+                else
+                {
+                    // If no customer found by ID, show a professional fallback
+                    customerInfoCache[booking.UserId] = $"Customer #{booking.UserId}";
+                }
+            }
+            catch
+            {
+                customerInfoCache[booking.UserId] = $"Customer #{booking.UserId}";
+            }
+        }
+    }
+
+    private string GetCustomerInfo(Booking booking)
+    {
+        return customerInfoCache.TryGetValue(booking.UserId, out var info) ? info : $"Customer #{booking.UserId}";
+    }
     
     private void ApplyFilters()
     {
@@ -254,6 +316,7 @@
             filteredBookings = filteredBookings.Where(b => 
                 b.Id.ToString().Contains(searchTerm) || 
                 GetDestinationName(b).Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                GetCustomerInfo(b).Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
                 b.UserId.ToString().Contains(searchTerm)
             ).ToList();
         }
@@ -273,16 +336,17 @@
             {
                 case "today":
                     cutoffDate = DateTime.Today;
-                    break;           
-                    case "week":
+                    filteredBookings = filteredBookings.Where(b => b.BookingDate.Date == DateTime.Today).ToList();
+                    break;
+                case "week":
                     cutoffDate = DateTime.Now.AddDays(-7);
+                    filteredBookings = filteredBookings.Where(b => b.BookingDate >= cutoffDate).ToList();
                     break;
                 case "month":
                     cutoffDate = DateTime.Now.AddDays(-30);
+                    filteredBookings = filteredBookings.Where(b => b.BookingDate >= cutoffDate).ToList();
                     break;
             }
-
-            filteredBookings = filteredBookings.Where(b => b.BookingDate >= cutoffDate).ToList();
         }
 
         // Calculate total pages
@@ -348,6 +412,7 @@
     {
         selectedBooking = booking;
         newStatus = booking.Status;
+        statusComment = "";
         showStatusModal = true;
         showNotificationModal = false;
     }
@@ -356,7 +421,7 @@
     {
         selectedBooking = booking;
         notificationSubject = $"Information about your booking to {GetDestinationName(booking)}";
-        notificationType = "email";
+        notificationType = "General";
         notificationMessage = "";
         showNotificationModal = true;
         showStatusModal = false;
@@ -366,7 +431,9 @@
     {
         showStatusModal = false;
         showNotificationModal = false;
+        showNotificationSuccess = false;
         selectedBooking = null;
+        errorMessage = null;
     }
 
     private async Task UpdateBookingStatus()
@@ -379,6 +446,30 @@
                 selectedBooking.Status = newStatus;
                 await DbContext.SaveChangesAsync();
 
+                // Send status change notification to customer if there's a comment
+                if (!string.IsNullOrWhiteSpace(statusComment))
+                {
+                    var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+                    var currentUser = await UserManager.GetUserAsync(authState.User);
+                    
+                    if (currentUser != null)
+                    {
+                        // Send to test customer
+                        var customer = await UserManager.FindByEmailAsync("testcustomer@gmail.com");
+                        if (customer != null)
+                        {
+                            await CustomerMessageService.SendMessageAsync(
+                                currentUser.Id,
+                                customer.Email,
+                                $"Booking Status Updated - #{selectedBooking.Id}",
+                                $"Booking status has been updated to: {newStatus}\n\nComment: {statusComment}",
+                                Gotorz.Models.MessageType.BookingChange,
+                                selectedBooking.Id
+                            );
+                        }
+                    }
+                }
+
                 // Close modal and refresh list
                 CloseModals();
                 StateHasChanged();
@@ -390,11 +481,67 @@
         }
     }
 
-    private void SendNotification()
+    private async Task SendNotification()
     {
-        // In a real application, this would connect to an email/SMS service
-        // For demo purposes, we'll just close the modal as if it was sent
-        CloseModals();
+        try
+        {
+            if (selectedBooking != null && !string.IsNullOrWhiteSpace(notificationSubject) && !string.IsNullOrWhiteSpace(notificationMessage))
+            {
+                // Get current sales agent
+                var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+                var currentUser = await UserManager.GetUserAsync(authState.User);
+                
+                if (currentUser != null)
+                {
+                    ApplicationUser customer = null;
+                    
+                    // Find the test customer by email
+                    customer = await UserManager.FindByEmailAsync("testcustomer@gmail.com");
+                    
+                    if (customer == null)
+                    {
+                        // Fallback: Find any user with Customer role
+                        var customerUsers = await UserManager.GetUsersInRoleAsync("Customer");
+                        customer = customerUsers.FirstOrDefault();
+                    }
+                    
+                    if (customer == null)
+                    {
+                        // Last resort: Use yourself for testing
+                        customer = currentUser;
+                    }
+                    
+                    // Parse the message type
+                    var msgType = notificationType switch
+                    {
+                        "SystemNotification" => Gotorz.Models.MessageType.SystemNotification,
+                        "Support" => Gotorz.Models.MessageType.Support,
+                        _ => Gotorz.Models.MessageType.General
+                    };
+
+                    // Send the message
+                    await CustomerMessageService.SendMessageAsync(
+                        currentUser.Id,
+                        customer.Email,
+                        notificationSubject,
+                        notificationMessage,
+                        msgType,
+                        selectedBooking.Id
+                    );
+
+                    // Show success and auto-close after 1.5 seconds
+                    showNotificationSuccess = true;
+                    StateHasChanged();
+                    
+                    await Task.Delay(1500);
+                    CloseModals();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error sending notification: {ex.Message}";
+        }
     }
 
     // Method to create mock bookings for preview when database is not available
@@ -429,7 +576,7 @@
                         Destination = destination,
                         StartDate = startDate,
                         EndDate = endDate,
-                        Price = price * 0.85m  // Package price is 85% of total (just for demo)
+                        Price = price * 0.85m
                     }
                 }
                 });

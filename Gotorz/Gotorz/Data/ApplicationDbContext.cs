@@ -20,6 +20,7 @@ namespace Gotorz.Data
         public DbSet<ChatMessage> ChatMessages { get; set; }
         public DbSet<ActivityLog> ActivityLogs { get; set; }
         public DbSet<CustomerInquiry> CustomerInquiries { get; set; }
+        public DbSet<CustomerMessage> CustomerMessages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -71,6 +72,16 @@ namespace Gotorz.Data
                 .HasForeignKey<HotelInfo>(h => h.TravelPackageId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .IsRequired();
+
+            // Configure indexes for performance
+            builder.Entity<CustomerMessage>()
+                .HasIndex(cm => cm.RecipientId);
+
+            builder.Entity<CustomerMessage>()
+                .HasIndex(cm => cm.SentDate);
+
+            builder.Entity<CustomerMessage>()
+                .HasIndex(cm => cm.IsRead);
 
             // Configure indexes for performance
             builder.Entity<ActivityLog>()

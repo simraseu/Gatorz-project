@@ -1,0 +1,424 @@
+﻿@page "/customer/messages"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Gotorz.Data
+@using Gotorz.Models
+@using Gotorz.Services
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize(Roles = "Customer")]
+@inject UserManager<ApplicationUser> UserManager
+@inject ICustomerMessageService CustomerMessageService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@rendermode InteractiveServer
+
+<PageTitle>My Messages - Gotorz</PageTitle>
+
+<div class="container py-4">
+    <h1>My Messages</h1>
+    <p class="lead">View messages from our support team and administrators</p>
+
+    <!-- Stats Row -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Messages</h5>
+                    <h2>@messages.Count</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Unread</h5>
+                    <h2>@unreadCount</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Read</h5>
+                    <h2>@(messages.Count - unreadCount)</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Tabs -->
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <a class="nav-link @(filter == "all" ? "active" : "")"
+               @onclick="@(e => FilterMessages("all"))" href="javascript:void(0)">
+                All Messages (@messages.Count)
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(filter == "unread" ? "active" : "")"
+               @onclick="@(e => FilterMessages("unread"))" href="javascript:void(0)">
+                Unread (@unreadCount)
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(filter == "password" ? "active" : "")"
+               @onclick="@(e => FilterMessages("password"))" href="javascript:void(0)">
+                Password Resets
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(filter == "booking" ? "active" : "")"
+               @onclick="@(e => FilterMessages("booking"))" href="javascript:void(0)">
+                Booking Related
+            </a>
+        </li>
+    </ul>
+
+    @if (isLoading)
+    {
+        <div class="d-flex justify-content-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading messages...</span>
+            </div>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">
+            <h4>Error Loading Messages</h4>
+            <p>@errorMessage</p>
+        </div>
+    }
+    else if (!filteredMessages.Any())
+    {
+        <div class="alert alert-info text-center">
+            <i class="bi bi-envelope fs-1"></i>
+            <h4>No messages found</h4>
+            @if (filter == "all")
+            {
+                <p>You don't have any messages yet. Our support team and administrators will send you messages here when needed.</p>
+            }
+            else
+            {
+                <p>No @filter messages found.</p>
+                <button class="btn btn-outline-primary" @onclick="@(() => FilterMessages("all"))">View All Messages</button>
+            }
+        </div>
+    }
+    else
+    {
+        <!-- Messages List -->
+        <div class="row">
+            @foreach (var message in filteredMessages)
+            {
+                <div class="col-12 mb-3">
+                    <div class="card @(message.IsRead ? "" : "border-primary") @(message.Priority == MessagePriority.High || message.Priority == MessagePriority.Urgent ? "border-warning" : "")">
+                        <div class="card-header d-flex justify-content-between align-items-center @(message.IsRead ? "bg-light" : "bg-primary text-white")">
+                            <div class="d-flex align-items-center">
+                                @if (!message.IsRead)
+                                {
+                                    <i class="bi bi-circle-fill text-warning me-2" style="font-size: 0.5rem;"></i>
+                                }
+                                <span class="badge bg-@GetMessageTypeColor(message.MessageType) me-2">
+                                    @GetMessageTypeDisplay(message.MessageType)
+                                </span>
+                                <h6 class="mb-0">@message.Subject</h6>
+                                @if (message.Priority == MessagePriority.High || message.Priority == MessagePriority.Urgent)
+                                {
+                                    <span class="badge bg-danger ms-2">
+                                        <i class="bi bi-exclamation-triangle"></i> @message.Priority
+                                    </span>
+                                }
+                            </div>
+                            <small class="@(message.IsRead ? "text-muted" : "text-white-50")">
+                                @message.SentDate.ToString("MMM d, yyyy h:mm tt")
+                            </small>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <strong>From:</strong> @message.SenderName
+                                    @if (message.RelatedBookingId.HasValue)
+                                    {
+                                        <span class="badge bg-info ms-2">
+                                            <i class="bi bi-suitcase"></i> Booking #@message.RelatedBookingId
+                                        </span>
+                                    }
+                                </div>
+                                <div class="btn-group">
+                                    @if (!message.IsRead)
+                                    {
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => MarkAsRead(message)">
+                                            <i class="bi bi-check"></i> Mark Read
+                                        </button>
+                                    }
+                                    <button class="btn btn-sm btn-primary" @onclick="() => ShowMessageDetails(message)">
+                                        <i class="bi bi-eye"></i> View Full Message
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Message Preview -->
+                            <div class="message-preview">
+                                @if (message.Message.Length > 150)
+                                {
+                                    <p>@(message.Message.Substring(0, 150))...</p>
+                                }
+                                else
+                                {
+                                    <p>@message.Message</p>
+                                }
+                            </div>
+
+                            @if (message.MessageType == MessageType.PasswordReset)
+                            {
+                                <div class="alert alert-warning mt-2">
+                                    <i class="bi bi-shield-exclamation"></i>
+                                    <strong>Security Notice:</strong> Your password has been reset. Please log in with the temporary password provided and change it immediately.
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Message Details Modal -->
+@if (selectedMessage != null && showDetailsModal)
+{
+    <div class="modal fade show" style="display: block;" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <span class="badge bg-@GetMessageTypeColor(selectedMessage.MessageType) me-2">
+                            @GetMessageTypeDisplay(selectedMessage.MessageType)
+                        </span>
+                        @selectedMessage.Subject
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p><strong>From:</strong> @selectedMessage.SenderName</p>
+                            <p><strong>Sent:</strong> @selectedMessage.SentDate.ToString("MMMM d, yyyy 'at' h:mm tt")</p>
+                            @if (selectedMessage.RelatedBookingId.HasValue)
+                            {
+                                <p><strong>Related Booking:</strong> #@selectedMessage.RelatedBookingId</p>
+                            }
+                        </div>
+                        <div class="col-md-6">
+                            <p>
+                                <strong>Priority:</strong>
+                                <span class="badge bg-@GetPriorityColor(selectedMessage.Priority)">
+                                    @selectedMessage.Priority
+                                </span>
+                            </p>
+                            <p>
+                                <strong>Status:</strong>
+                                <span class="badge bg-@(selectedMessage.IsRead ? "success" : "warning")">
+                                    @(selectedMessage.IsRead ? "Read" : "Unread")
+                                </span>
+                            </p>
+                            @if (selectedMessage.IsRead && selectedMessage.ReadDate.HasValue)
+                            {
+                                <p><strong>Read on:</strong> @selectedMessage.ReadDate.Value.ToString("MMM d, yyyy h:mm tt")</p>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0">Message Content</h6>
+                        </div>
+                        <div class="card-body">
+                            <p style="white-space: pre-wrap;">@selectedMessage.Message</p>
+                        </div>
+                    </div>
+
+                    @if (selectedMessage.MessageType == MessageType.PasswordReset)
+                    {
+                        <div class="alert alert-warning mt-3">
+                            <h6><i class="bi bi-shield-exclamation"></i> Important Security Information</h6>
+                            <ul class="mb-0">
+                                <li>This temporary password should be used only once to log in</li>
+                                <li>Change your password immediately after logging in</li>
+                                <li>If you did not request this reset, contact support immediately</li>
+                                <li>This temporary password will expire in 24 hours</li>
+                            </ul>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    @if (!selectedMessage.IsRead)
+                    {
+                        <button type="button" class="btn btn-success" @onclick="() => MarkAsRead(selectedMessage)">
+                            <i class="bi bi-check"></i> Mark as Read
+                        </button>
+                    }
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    private List<CustomerMessage> messages = new List<CustomerMessage>();
+    private List<CustomerMessage> filteredMessages = new List<CustomerMessage>();
+    private CustomerMessage? selectedMessage;
+    private string currentUserEmail = "";
+    private bool isLoading = true;
+    private string errorMessage = null;
+    private string filter = "all";
+    private int unreadCount = 0;
+    private bool showDetailsModal = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            isLoading = true;
+
+            // Get current user
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var currentUser = await UserManager.GetUserAsync(authState.User);
+
+            if (currentUser != null)
+            {
+                currentUserEmail = currentUser.Email;
+
+                // Load messages for this customer
+                messages = await CustomerMessageService.GetMessagesForCustomerAsync(currentUserEmail);
+                unreadCount = await CustomerMessageService.GetUnreadCountAsync(currentUserEmail);
+
+                FilterMessages(filter);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading messages: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void FilterMessages(string filterType)
+    {
+        filter = filterType;
+
+        switch (filter)
+        {
+            case "unread":
+                filteredMessages = messages.Where(m => !m.IsRead).ToList();
+                break;
+            case "password":
+                filteredMessages = messages.Where(m => m.MessageType == MessageType.PasswordReset).ToList();
+                break;
+            case "booking":
+                filteredMessages = messages.Where(m => m.MessageType == MessageType.BookingChange ||
+                                                       m.MessageType == MessageType.BookingConfirmation ||
+                                                       m.RelatedBookingId.HasValue).ToList();
+                break;
+            case "all":
+            default:
+                filteredMessages = messages.ToList();
+                break;
+        }
+
+        // Sort by sent date (newest first)
+        filteredMessages = filteredMessages.OrderByDescending(m => m.SentDate).ToList();
+    }
+
+    private void ShowMessageDetails(CustomerMessage message)
+    {
+        selectedMessage = message;
+        showDetailsModal = true;
+
+        // Auto-mark as read when viewing
+        if (!message.IsRead)
+        {
+            _ = MarkAsRead(message);
+        }
+    }
+
+    private void CloseModal()
+    {
+        showDetailsModal = false;
+        selectedMessage = null;
+    }
+
+    private async Task MarkAsRead(CustomerMessage message)
+    {
+        try
+        {
+            var success = await CustomerMessageService.MarkAsReadAsync(message.Id, currentUserEmail);
+
+            if (success)
+            {
+                message.IsRead = true;
+                message.ReadDate = DateTime.UtcNow;
+                unreadCount = Math.Max(0, unreadCount - 1);
+
+                // Update filtered list if needed
+                if (filter == "unread")
+                {
+                    FilterMessages(filter);
+                }
+
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle error silently or show message
+        }
+    }
+
+    // Helper methods for styling and display
+    private string GetMessageTypeColor(MessageType messageType)
+    {
+        return messageType switch
+        {
+            MessageType.PasswordReset => "danger",
+            MessageType.BookingChange => "warning",
+            MessageType.BookingConfirmation => "success",
+            MessageType.Support => "info",
+            MessageType.SystemNotification => "secondary",
+            MessageType.General => "primary",
+            _ => "secondary"
+        };
+    }
+
+    private string GetMessageTypeDisplay(MessageType messageType)
+    {
+        return messageType switch
+        {
+            MessageType.PasswordReset => "Password Reset",
+            MessageType.BookingChange => "Booking Update",
+            MessageType.BookingConfirmation => "Booking Confirmation",
+            MessageType.Support => "Support",
+            MessageType.SystemNotification => "System Notice",
+            MessageType.General => "General",
+            _ => messageType.ToString()
+        };
+    }
+
+    private string GetPriorityColor(MessagePriority priority)
+    {
+        return priority switch
+        {
+            MessagePriority.Urgent => "danger",
+            MessagePriority.High => "warning",
+            MessagePriority.Normal => "info",
+            MessagePriority.Low => "secondary",
+            _ => "secondary"
+        };
+    }
+}
