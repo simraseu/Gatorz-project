@@ -1,0 +1,539 @@
+﻿/* CSS Variables */
+:root {
+    --primary-color: #0066cc;
+    --secondary-color: #ff6b35;
+    --accent-color: #4ecdc4;
+    --dark-color: #2c3e50;
+    --light-color: #f8f9fa;
+}
+
+/* Keyframe Animations - Using @@ to escape Razor @ symbol */
+@@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+@@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@@keyframes floating {
+    0%, 100% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+/* Hero Section */
+.hero-section {
+    background: linear-gradient(135deg, rgba(0, 102, 204, 0.9), rgba(76, 205, 196, 0.8)), url('https://images.unsplash.com/photo-1488646953014-85cb44e25828?ixlib=rb-4.0.3&auto=format&fit=crop&w=2035&q=80');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+    .hero-section::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+        animation: shimmer 3s infinite;
+    }
+
+.hero-content {
+    position: relative;
+    z-index: 2;
+}
+
+.hero-title {
+    font-size: 4rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    animation: fadeInUp 1s ease-out;
+    color: white;
+}
+
+.hero-subtitle {
+    font-size: 1.5rem;
+    margin-bottom: 2rem;
+    font-weight: 300;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    animation: fadeInUp 1s ease-out 0.3s both;
+    color: white;
+}
+
+.hero-cta {
+    animation: fadeInUp 1s ease-out 0.6s both;
+}
+
+.btn-hero {
+    background: linear-gradient(45deg, var(--secondary-color), #ff8c42);
+    border: none;
+    padding: 15px 40px;
+    font-size: 1.2rem;
+    font-weight: 600;
+    border-radius: 50px;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 25px rgba(255, 107, 53, 0.3);
+    color: white;
+}
+
+    .btn-hero:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 35px rgba(255, 107, 53, 0.4);
+        background: linear-gradient(45deg, #ff8c42, var(--secondary-color));
+        color: white;
+    }
+
+/* Search Section */
+.search-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 4rem 0;
+    margin-top: -50px;
+    position: relative;
+    z-index: 3;
+}
+
+.search-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+    .search-card h3 {
+        color: #333 !important; /* Dark text for search title */
+    }
+
+.search-input {
+    border: 2px solid #e9ecef;
+    border-radius: 15px;
+    padding: 15px 20px;
+    transition: all 0.3s ease;
+    color: #333; /* Dark text in inputs */
+    background: white;
+}
+
+    .search-input:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 0.2rem rgba(0, 102, 204, 0.25);
+        color: #333;
+        background: white;
+    }
+
+.search-btn {
+    background: linear-gradient(45deg, var(--primary-color), var(--accent-color));
+    border: none;
+    border-radius: 15px;
+    padding: 15px 30px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    color: white;
+}
+
+    .search-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 102, 204, 0.3);
+        color: white;
+    }
+
+/* Features Section */
+.features-section {
+    padding: 6rem 0;
+    background: var(--light-color);
+}
+
+    .features-section h2 {
+        color: var(--dark-color); /* Dark color for main heading */
+    }
+
+    .features-section .lead {
+        color: #6c757d; /* Muted color for subtitle */
+    }
+
+.feature-card {
+    background: white;
+    border-radius: 20px;
+    padding: 3rem 2rem;
+    height: 100%;
+    transition: all 0.3s ease;
+    border: none;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    color: #333; /* Ensure dark text on white background */
+}
+
+    .feature-card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    }
+
+    .feature-card h4 {
+        color: var(--dark-color); /* Dark color for headings */
+    }
+
+    .feature-card .text-muted {
+        color: #6c757d !important; /* Proper muted text color */
+    }
+
+.feature-icon {
+    width: 120px; /* Increased from 80px */
+    height: 120px; /* Increased from 80px */
+    background: linear-gradient(45deg, var(--primary-color), var(--accent-color));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 2rem auto;
+    font-size: 3rem; /* Increased from 2rem */
+    color: white !important;
+}
+
+    .feature-icon i {
+        color: white !important;
+        font-size: 3rem; /* Increased from 2rem */
+        display: block;
+    }
+
+    /* Ensure Bootstrap Icons are loaded */
+    .feature-icon .bi {
+        color: white !important;
+        font-size: 3rem; /* Increased from 2rem */
+        line-height: 1;
+    }
+
+/* Destinations Section */
+.destinations-section {
+    padding: 6rem 0;
+    background: white;
+    color: #333; /* Ensure dark text on white background */
+}
+
+    .destinations-section h2 {
+        color: var(--dark-color); /* Dark color for main heading */
+    }
+
+    .destinations-section .lead {
+        color: #6c757d; /* Muted color for subtitle */
+    }
+
+.destination-card {
+    border-radius: 20px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    border: none;
+    height: 100%;
+    background: white; /* Ensure white background */
+}
+
+    .destination-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    }
+
+    .destination-card .card-body {
+        background: white;
+        color: #333; /* Dark text on white background */
+    }
+
+    .destination-card .card-title {
+        color: var(--dark-color); /* Dark color for destination names */
+        font-weight: bold;
+    }
+
+    .destination-card .card-text {
+        color: #6c757d; /* Muted text for descriptions */
+    }
+
+    .destination-card .text-muted {
+        color: #6c757d !important; /* Ensure muted text is visible */
+    }
+
+    .destination-card .text-primary {
+        color: var(--primary-color) !important; /* Blue for chat links */
+    }
+
+.destination-image {
+    height: 250px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.destination-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, rgba(0, 102, 204, 0.8), rgba(76, 205, 196, 0.6));
+    opacity: 0;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.destination-card:hover .destination-overlay {
+    opacity: 1;
+}
+
+.price-badge {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: linear-gradient(45deg, var(--secondary-color), #ff8c42);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 25px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+/* Testimonials Section - New approach using Bootstrap classes */
+.testimonials-section-alt {
+    background: #1a1a1a !important;
+    padding: 6rem 0;
+}
+
+    .testimonials-section-alt .card {
+        transition: all 0.3s ease;
+        background: rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(10px);
+    }
+
+        .testimonials-section-alt .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+    .testimonials-section-alt .text-white {
+        color: #ffffff !important;
+    }
+
+    .testimonials-section-alt .text-white-50 {
+        color: rgba(255, 255, 255, 0.5) !important;
+    }
+
+    .testimonials-section-alt .rating {
+        color: #ffc107 !important;
+    }
+
+/* Hide any remaining price badges completely */
+.price-badge {
+    display: none !important;
+}
+
+.destination-image .price-badge {
+    display: none !important;
+}
+
+/* Live Chat Section - More Prominent and Professional */
+.live-chat-section-prominent {
+    padding: 3rem 2rem;
+    border-top: 2px solid rgba(255, 255, 255, 0.2);
+    margin-top: 3rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 15px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+    .live-chat-section-prominent h5 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #ffffff !important;
+    }
+
+    .live-chat-section-prominent p {
+        font-size: 1.1rem;
+        line-height: 1.6;
+        color: rgba(255, 255, 255, 0.8) !important;
+    }
+
+    .live-chat-section-prominent .btn-outline-light {
+        border-color: rgba(255, 255, 255, 0.5);
+        color: #ffffff;
+        font-size: 1rem;
+        font-weight: 500;
+        padding: 0.75rem 2rem;
+        border-radius: 30px;
+        transition: all 0.3s ease;
+        border-width: 2px;
+    }
+
+        .live-chat-section-prominent .btn-outline-light:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: #ffffff;
+            color: #ffffff;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(255, 255, 255, 0.2);
+        }
+
+    .live-chat-section-prominent .btn-light {
+        background: #ffffff;
+        color: #1a1a1a;
+        font-size: 1rem;
+        font-weight: 500;
+        padding: 0.75rem 2rem;
+        border-radius: 30px;
+        border: none;
+        transition: all 0.3s ease;
+    }
+
+        .live-chat-section-prominent .btn-light:hover {
+            background: #f8f9fa;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(255, 255, 255, 0.3);
+        }
+
+.rating {
+    color: #ffc107;
+    margin-bottom: 1rem;
+}
+
+/* Newsletter Section */
+.newsletter-section {
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--primary-color) 100%);
+    padding: 4rem 0;
+    color: white;
+}
+
+    .newsletter-section h2 {
+        color: white;
+    }
+
+    .newsletter-section .lead {
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+.newsletter-input {
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border-radius: 50px;
+    padding: 15px 25px;
+}
+
+    .newsletter-input::placeholder {
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .newsletter-input:focus {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.5);
+        color: white;
+        box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.25);
+    }
+
+.newsletter-btn {
+    background: var(--secondary-color);
+    border: none;
+    border-radius: 50px;
+    padding: 15px 30px;
+    font-weight: 600;
+    color: white;
+}
+
+    .newsletter-btn:hover {
+        background: #ff8c42;
+        color: white;
+    }
+
+.newsletter-section .opacity-75 {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+/* Customer Dashboard Enhancement */
+.customer-dashboard-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 2rem 0;
+}
+
+    .customer-dashboard-section h4 {
+        color: white;
+    }
+
+    .customer-dashboard-section .text-light {
+        color: rgba(255, 255, 255, 0.9) !important;
+    }
+
+    .customer-dashboard-section .btn-success {
+        background: linear-gradient(45deg, #28a745, #20c997);
+        border: none;
+        box-shadow: 0 2px 10px rgba(40, 167, 69, 0.3);
+        border-radius: 25px;
+        padding: 10px 25px;
+        color: white;
+    }
+
+        .customer-dashboard-section .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+            color: white;
+        }
+
+    .customer-dashboard-section .btn-outline-light {
+        color: white;
+        border-color: rgba(255, 255, 255, 0.5);
+    }
+
+        .customer-dashboard-section .btn-outline-light:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: white;
+            color: white;
+        }
+
+/* Animation Classes */
+.floating {
+    animation: floating 3s ease-in-out infinite;
+}
+
+/* Responsive Design */
+@@media (max-width: 768px) {
+    .hero-title {
+        font-size: 2.5rem;
+    }
+
+    .hero-subtitle {
+        font-size: 1.2rem;
+    }
+
+    .feature-card {
+        margin-bottom: 2rem;
+    }
+
+    .search-section .row.g-3 > div {
+        margin-bottom: 1rem;
+    }
+}

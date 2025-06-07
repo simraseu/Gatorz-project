@@ -9,225 +9,245 @@
 @inject NavigationManager NavigationManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
-<PageTitle>Gotorz - Discover the world with Gotorz</PageTitle>
+<PageTitle>Gotorz - Discover Amazing Travel Experiences</PageTitle>
 
-<div class="hero-container">
-    <div class="hero-content">
-        <h1 class="hero-title">Discover the world with Gotorz</h1>
-        <p class="hero-subtitle">Complete travel packages at the best prices</p>
-        <a href="/search" class="btn btn-primary btn-lg mt-4">Find your journey now</a>
+<!-- Hero Section -->
+<section class="hero-section">
+    <div class="container">
+        <div class="row justify-content-center text-center">
+            <div class="col-lg-10 hero-content">
+                <h1 class="hero-title">Discover Amazing Travel Experiences</h1>
+                <p class="hero-subtitle">Create unforgettable memories with our carefully curated travel packages combining the best flights and accommodations</p>
+                <div class="hero-cta">
+                    <a href="/search" class="btn btn-hero btn-lg me-3">
+                        <i class="bi bi-compass me-2"></i>Find Your Adventure
+                    </a>
+                    <a href="#destinations" class="btn btn-outline-light btn-lg">
+                        <i class="bi bi-play-circle me-2"></i>Explore Destinations
+                    </a>
+                </div>
+            </div>
+        </div>
     </div>
-</div>
+</section>
 
 <!-- Customer Dashboard Section (only visible to authenticated customers) -->
 <AuthorizeView Roles="Customer">
     <Authorized>
-        <div class="customer-dashboard-section">
+        <section class="customer-dashboard-section">
             <div class="container py-4">
                 <div class="row align-items-center">
                     <div class="col-md-8">
                         <h4 class="mb-2">Welcome back, @context.User.FindFirst("FirstName")?.Value!</h4>
-                        <p class="text-muted mb-0">Ready for your next adventure? Check out what fellow travelers are saying.</p>
+                        <p class="text-light mb-0">Ready for your next adventure? Connect with fellow travelers and share experiences.</p>
                     </div>
                     <div class="col-md-4 text-md-end">
                         <a href="/customer/chat" class="btn btn-success me-2">
                             <i class="bi bi-chat-dots"></i> Travel Chat
                         </a>
-                        <a href="/Account/Manage" class="btn btn-outline-primary">
+                        <a href="/Account/Manage" class="btn btn-outline-light">
                             <i class="bi bi-person-gear"></i> My Account
                         </a>
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
     </Authorized>
 </AuthorizeView>
 
-<div class="container mt-5">
-    <div class="row">
-        <div class="col-md-4 mb-4">
-            <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="bi bi-globe"></i>
-                </div>
-                <h3>Popular Destinations</h3>
-                <p>Explore our carefully selected destinations with fantastic experiences and competitive prices.</p>
+<!-- Features Section -->
+<section class="features-section">
+    <div class="container">
+        <div class="row text-center mb-5">
+            <div class="col-lg-8 mx-auto">
+                <h2 class="display-5 fw-bold mb-3">Why Choose Gotorz?</h2>
+                <p class="lead text-muted">We make travel planning effortless with our comprehensive packages and exceptional service</p>
             </div>
         </div>
-        <div class="col-md-4 mb-4">
-            <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="bi bi-star"></i>
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="feature-card text-center">
+                    <div class="feature-icon floating">
+                        <i class="bi bi-globe2"></i>
+                    </div>
+                    <h4 class="fw-bold mb-3">Worldwide Destinations</h4>
+                    <p class="text-muted">Explore carefully selected destinations with amazing experiences and competitive prices. From bustling cities to serene beaches.</p>
                 </div>
-                <h3>All-in-one Package</h3>
-                <p>Flight and hotel combined in one comprehensive package - We handle all the details so you can focus on the experience.</p>
             </div>
-        </div>
-        <div class="col-md-4 mb-4">
-            <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="bi bi-piggy-bank"></i>
+            <div class="col-md-4">
+                <div class="feature-card text-center">
+                    <div class="feature-icon floating" style="animation-delay: 0.2s;">
+                        <i class="bi bi-star-fill"></i>
+                    </div>
+                    <h4 class="fw-bold mb-3">All-in-One Packages</h4>
+                    <p class="text-muted">Flight and hotel combined in comprehensive packages. We handle all details so you can focus on creating memories.</p>
                 </div>
-                <h3>Price Guarantee</h3>
-                <p>We offer budget-friendly travel without compromising on quality and your experience.</p>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-card text-center">
+                    <div class="feature-icon floating" style="animation-delay: 0.4s;">
+                        <i class="bi bi-shield-check"></i>
+                    </div>
+                    <h4 class="fw-bold mb-3">Price Guarantee</h4>
+                    <p class="text-muted">Best price guarantee with transparent pricing. No hidden fees, and budget-friendly options without compromising quality.</p>
+                </div>
             </div>
         </div>
     </div>
-</div>
+</section>
 
-<!-- Enhanced Travel Features Section for Customers -->
-<AuthorizeView Roles="Customer">
-    <Authorized>
-        <div class="container mt-5">
-            <div class="row">
-                <div class="col-md-12">
-                    <div class="card bg-light border-0">
+<!-- Popular Destinations Section -->
+<section class="destinations-section" id="destinations">
+    <div class="container">
+        <div class="row text-center mb-5">
+            <div class="col-lg-8 mx-auto">
+                <h2 class="display-5 fw-bold mb-3">Popular Destinations</h2>
+                <p class="lead text-muted">Discover our most loved travel destinations, handpicked for unforgettable experiences</p>
+            </div>
+        </div>
+        <div class="row g-4">
+            @foreach (var destination in popularDestinations)
+            {
+                <div class="col-lg-4 col-md-6">
+                    <div class="destination-card">
+                        <div class="destination-image" style="background-image: url('@destination.ImageUrl')">
+                            <div class="price-badge">From $@destination.Price</div>
+                            <div class="destination-overlay">
+                                <a href="/search?destination=@destination.Name" class="btn btn-light btn-lg">
+                                    <i class="bi bi-arrow-right me-2"></i>Explore @destination.Name
+                                </a>
+                            </div>
+                        </div>
                         <div class="card-body p-4">
-                            <div class="row align-items-center">
-                                <div class="col-md-8">
-                                    <h5 class="card-title mb-3">
-                                        <i class="bi bi-people text-primary"></i> Connect with Fellow Travelers
-                                    </h5>
-                                    <p class="card-text">Join our travel community! Chat with other travelers, share experiences, get recommendations, and find travel companions for your next adventure.</p>
-                                    <div class="d-flex align-items-center">
-                                        <small class="text-muted me-3">
-                                            <i class="bi bi-clock"></i> Active now: @activeDestinations.Count destinations
-                                        </small>
-                                        <small class="text-muted">
-                                            <i class="bi bi-shield-check"></i> Safe & Moderated
-                                        </small>
-                                    </div>
-                                </div>
-                                <div class="col-md-4 text-center">
-                                    <a href="/customer/chat" class="btn btn-primary btn-lg">
-                                        <i class="bi bi-chat-heart"></i> Start Chatting
-                                    </a>
-                                    <div class="mt-2">
-                                        <small class="text-muted">Free for all customers</small>
-                                    </div>
-                                </div>
+                            <h5 class="card-title fw-bold">@destination.Name</h5>
+                            <p class="card-text text-muted">@destination.Description</p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    <i class="bi bi-star-fill text-warning me-1"></i>@destination.Rating
+                                </small>
+                                <AuthorizeView Roles="Customer">
+                                    <Authorized>
+                                        <a href="/customer/chat" class="text-primary text-decoration-none">
+                                            <i class="bi bi-chat-dots"></i> Chat
+                                        </a>
+                                    </Authorized>
+                                </AuthorizeView>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </Authorized>
-</AuthorizeView>
-
-<div class="container mt-5 mb-5">
-    <h2 class="text-center mb-4">Popular Destinations</h2>
-    <div class="row">
-        @foreach (var destination in popularDestinations)
-        {
-            <div class="col-md-4 mb-4">
-                <div class="card destination-card">
-                    <div class="destination-img" style="background-image: url('@destination.ImageUrl')">
-                        <div class="destination-overlay">
-                            <span class="price-tag">From $@destination.Price</span>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <h5 class="card-title">@destination.Name</h5>
-                        <p class="card-text">@destination.Description</p>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <a href="/search?destination=@destination.Name" class="btn btn-outline-primary">See offers</a>
-                            <AuthorizeView Roles="Customer">
-                                <Authorized>
-                                    <a href="/customer/chat" class="btn btn-sm btn-link text-decoration-none" title="Chat about @destination.Name">
-                                        <i class="bi bi-chat-dots"></i> Chat
-                                    </a>
-                                </Authorized>
-                            </AuthorizeView>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
-    </div>
-</div>
-
-<div class="testimonial-section">
-    <div class="container">
-        <h2 class="text-center text-white mb-5">What Our Customers Say</h2>
-        <div class="row">
-            <div class="col-md-4 mb-4">
-                <div class="testimonial-card">
-                    <div class="testimonial-rating">
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                    </div>
-                    <p class="testimonial-text">"Fantastic service and incredibly easy bookings. I will definitely use Gotorz again!"</p>
-                    <p class="testimonial-author">- Maria P.</p>
-                </div>
-            </div>
-            <div class="col-md-4 mb-4">
-                <div class="testimonial-card">
-                    <div class="testimonial-rating">
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                    </div>
-                    <p class="testimonial-text">"The prices are really competitive, and the package solution makes everything so much easier. Thanks for a wonderful vacation!"</p>
-                    <p class="testimonial-author">- Andrew K.</p>
-                </div>
-            </div>
-            <div class="col-md-4 mb-4">
-                <div class="testimonial-card">
-                    <div class="testimonial-rating">
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-half"></i>
-                    </div>
-                    <p class="testimonial-text">"Top-class customer service and good prices. My family and I really enjoyed our vacation to Barcelona!"</p>
-                    <p class="testimonial-author">- Samuel M.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="container mt-5 mb-5 text-center">
-    <h2 class="mb-4">Ready to explore the world?</h2>
-    <p class="lead mb-4">Sign up for our newsletter and get exclusive offers and inspiration for your next journey.</p>
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="input-group mb-3">
-                <input type="email" class="form-control" placeholder="Your email address" aria-label="Email">
-                <button class="btn btn-primary" type="button">Subscribe</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<style>
-    .customer-dashboard-section {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        margin-top: -20px;
-    }
-
-        .customer-dashboard-section .btn-success {
-            background: linear-gradient(45deg, #28a745, #20c997);
-            border: none;
-            box-shadow: 0 2px 10px rgba(40, 167, 69, 0.3);
-        }
-
-            .customer-dashboard-section .btn-success:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
             }
-</style>
+        </div>
+    </div>
+</section>
+
+<!-- Testimonials Section -->
+<section class="testimonials-section-alt" style="background: #1a1a1a; padding: 6rem 0;">
+    <div class="container">
+        <div class="row text-center mb-5">
+            <div class="col-lg-8 mx-auto">
+                <h2 class="display-5 fw-bold mb-3 text-white">What Our Travelers Say</h2>
+                <p class="lead text-white-50">Real experiences from real customers who've trusted us with their dream vacations</p>
+            </div>
+        </div>
+        <div class="row g-4">
+            @foreach (var testimonial in testimonials)
+            {
+                <div class="col-md-4">
+                    <div class="card bg-dark text-white border-secondary" style="border-radius: 20px; padding: 1rem;">
+                        <div class="card-body text-center">
+                            <div class="rating mb-3 text-warning">
+                                @for (int i = 0; i < testimonial.FullStars; i++)
+                                {
+                                    <i class="bi bi-star-fill"></i>
+                                }
+                                @if (testimonial.HasHalfStar)
+                                {
+                                    <i class="bi bi-star-half"></i>
+                                }
+                            </div>
+                            <p class="card-text text-white mb-4">"@testimonial.Review"</p>
+                            <div class="text-center">
+                                <div class="fw-bold text-white">@testimonial.CustomerName</div>
+                                <small class="text-white-50">@testimonial.Destination Traveler</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- More Prominent Live Chat Section -->
+        <div class="row mt-5">
+            <div class="col-12 text-center">
+                <AuthorizeView Roles="Customer">
+                    <Authorized>
+                        <div class="live-chat-section-prominent">
+                            <h5 class="text-white mb-3">
+                                <i class="bi bi-chat-dots me-2"></i>
+                                Connect with Fellow Travelers
+                            </h5>
+                            <p class="text-white-50 mb-4 fs-6">
+                                Share experiences and get authentic travel advice from our community of real customers
+                            </p>
+                            <a href="/customer/chat" class="btn btn-outline-light">
+                                <i class="bi bi-people me-2"></i>Join Travel Community
+                            </a>
+                        </div>
+                    </Authorized>
+                    <NotAuthorized>
+                        <div class="live-chat-section-prominent">
+                            <h5 class="text-white mb-3">
+                                <i class="bi bi-people me-2"></i>
+                                Talk to Real Travelers
+                            </h5>
+                            <p class="text-white-50 mb-4 fs-6">
+                                Get authentic insights and advice from customers who've experienced these destinations firsthand
+                            </p>
+                            <div>
+                                <a href="/Account/Login" class="btn btn-outline-light me-3">Login to Chat</a>
+                                <a href="/Account/Register" class="btn btn-light">Join Our Community</a>
+                            </div>
+                        </div>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+        </div>
+    </div>
+</section>
 
 @code {
-    private List<string> activeDestinations = new() { "Barcelona", "Rome", "Paris", "Dubai", "London" };
+    // Search model
+    public class SearchModel
+    {
+        public string Origin { get; set; } = "";
+        public string Destination { get; set; } = "";
+        public DateTime DepartureDate { get; set; } = DateTime.Now.AddDays(7);
+    }
+
+    // Destination model
+    public class DestinationModel
+    {
+        public string Name { get; set; }
+        public string Description { get; set; }
+        public decimal Price { get; set; }
+        public string ImageUrl { get; set; }
+        public string Duration { get; set; }
+        public string Rating { get; set; }
+    }
+
+    // Testimonial model
+    public class TestimonialModel
+    {
+        public string CustomerName { get; set; }
+        public string Review { get; set; }
+        public string Destination { get; set; }
+        public string CustomerImage { get; set; }
+        public int FullStars { get; set; }
+        public bool HasHalfStar { get; set; }
+    }
+
+    private SearchModel searchModel = new SearchModel();
 
     // Mock data for popular destinations
     private List<DestinationModel> popularDestinations = new List<DestinationModel>
@@ -235,32 +255,67 @@
         new DestinationModel
         {
             Name = "Barcelona",
-            Description = "Experience the Catalan capital with amazing architecture and beach life.",
+            Description = "Experience the Catalan capital with stunning architecture, vibrant culture, and beautiful beaches. Home to Gaudí's masterpieces.",
             Price = 2499,
-            ImageUrl = "/images/barcelona.jpg"
+            ImageUrl = "https://images.unsplash.com/photo-1583422409516-2895a77efded?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+            Duration = "5-7 days",
+            Rating = "4.8"
         },
         new DestinationModel
         {
             Name = "Rome",
-            Description = "Explore the eternal city with historical sights and exquisite food.",
+            Description = "Explore the eternal city with ancient history, incredible food, and timeless art. Walk through 2,000 years of history.",
             Price = 2899,
-            ImageUrl = "/images/rome.jpg"
+            ImageUrl = "https://images.unsplash.com/photo-1531572753322-ad063cecc140?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+            Duration = "6-8 days",
+            Rating = "4.9"
         },
         new DestinationModel
         {
             Name = "Dubai",
-            Description = "Luxury in the desert with impressive skyscrapers and exclusive shopping.",
+            Description = "Luxury in the desert with impressive skyscrapers, world-class shopping, and exclusive experiences in a modern oasis.",
             Price = 3999,
-            ImageUrl = "/images/dubai.jpg"
+            ImageUrl = "https://images.unsplash.com/photo-1518684079-3c830dcef090?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80",
+            Duration = "4-6 days",
+            Rating = "4.7"
         }
     };
 
-    // Model class for destinations
-    private class DestinationModel
+    // Mock data for testimonials
+    private List<TestimonialModel> testimonials = new List<TestimonialModel>
     {
-        public string Name { get; set; }
-        public string Description { get; set; }
-        public decimal Price { get; set; }
-        public string ImageUrl { get; set; }
+        new TestimonialModel
+        {
+            CustomerName = "Maria Rodriguez",
+            Review = "Absolutely incredible service! The Barcelona package was perfectly organized. Every detail was taken care of, and we could just enjoy our vacation.",
+            Destination = "Barcelona",
+            CustomerImage = "https://images.unsplash.com/photo-1494790108755-2616b612b786?ixlib=rb-4.0.3&auto=format&fit=crop&w=64&q=80",
+            FullStars = 5,
+            HasHalfStar = false
+        },
+        new TestimonialModel
+        {
+            CustomerName = "Andrew Thompson",
+            Review = "Best travel experience ever! The prices were competitive and the package solution made everything so much easier. Our Rome trip was unforgettable!",
+            Destination = "Rome",
+            CustomerImage = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=64&q=80",
+            FullStars = 5,
+            HasHalfStar = false
+        },
+        new TestimonialModel
+        {
+            CustomerName = "Sarah Johnson",
+            Review = "Outstanding customer service and great value! Our family vacation to Dubai exceeded all expectations. Will definitely book again!",
+            Destination = "Dubai",
+            CustomerImage = "https://images.unsplash.com/photo-1517841905240-472988babdf9?ixlib=rb-4.0.3&auto=format&fit=crop&w=64&q=80",
+            FullStars = 4,
+            HasHalfStar = true
+        }
+    };
+
+    private void HandleSearch()
+    {
+        var searchUrl = $"/search?origin={Uri.EscapeDataString(searchModel.Origin)}&destination={Uri.EscapeDataString(searchModel.Destination)}&departure={searchModel.DepartureDate:yyyy-MM-dd}";
+        NavigationManager.NavigateTo(searchUrl);
     }
 }
