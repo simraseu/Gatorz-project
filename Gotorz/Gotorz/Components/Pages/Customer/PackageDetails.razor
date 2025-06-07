@@ -12,6 +12,7 @@
 @inject ILogger<PackageDetails> Logger
 @inject IActivityLogService ActivityLogService
 @inject IHttpContextAccessor HttpContextAccessor
+@inject SelectedPackageService PackageService
 @rendermode InteractiveServer
 
 <PageTitle>Travel Package Details - Gotorz</PageTitle>
@@ -241,8 +242,8 @@
 
                         <div class="d-grid gap-2">
                             <button class="btn btn-primary btn-lg"
-                                    @onclick="() => BookNow(travelPackage.Id)"
-                                    disabled="@(isBookingInProgress || !IsPackageAvailable())">
+                            @onclick="() => BookNow(travelPackage.Id)"
+                            disabled="@(isBookingInProgress || !IsPackageAvailable())">
                                 @if (isBookingInProgress)
                                 {
                                     <span class="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -393,7 +394,16 @@
     private string errorMessage;
     private bool showLoginModal = false;
     private bool showConfirmModal = false;
+   
 
+    protected override void OnInitialized()
+    {
+        travelPackage = PackageService.GetPackage();
+        if (travelPackage == null)
+        {
+            NavigationManager.NavigateTo("/search"); // fallback hvis man opdaterer siden
+        }
+    }
     protected override async Task OnInitializedAsync()
     {
         try

@@ -4,6 +4,8 @@
 @inject ITravelPackageService TravelPackageService
 @inject NavigationManager NavigationManager
 @inject ILogger<Search> Logger
+@inject SelectedPackageService PackageService
+@inject NavigationManager Nav
 @rendermode InteractiveServer
 
 <PageTitle>Search for Travel - Gotorz</PageTitle>
@@ -181,7 +183,7 @@
                                     <span class="price-label">Total price</span>
                                     <span class="price-value">$@package.GetFormattedPrice()</span>
                                 </div>
-                                <a href="/package/@package.Id" class="btn btn-primary">View details</a>
+                                <button class="btn btn-primary" @onclick="() => ViewDetails(package)">View</button>
                             </div>
                         </div>
                     </div>
@@ -213,6 +215,13 @@
         }
 
         Logger.LogInformation("Search page initialized");
+    }
+    @code {
+        private void ViewDetails(TravelPackageViewModel package)
+        {
+            PackageService.SetPackage(package);
+            Nav.NavigateTo("/package-details"); // eller evt. uden ID i URL
+        }
     }
 
     private async Task SearchTravelPackages()
