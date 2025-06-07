@@ -71,8 +71,6 @@ builder.Services.AddScoped<IHotelService, HotelService>();
 builder.Services.AddScoped<ITravelPackageService, TravelPackageService>();
 builder.Services.AddScoped<IActivityLogService, ActivityLogService>();
 builder.Services.AddScoped<IBookingService, BookingService>();
-builder.Services.AddScoped<SelectedPackageService>();
-
 
 // Add SignalR with detailed errors
 builder.Services.AddSignalR(options =>
