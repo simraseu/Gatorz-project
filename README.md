@@ -24,10 +24,14 @@ deployed url: https://gotorz-travel-team-16-h9fjamhbbhg3ebfa.northeurope-01.azur
         Microsoft.EntityFrameworkCore.Tools
         Newtonsoft.Json
 
-*Opsætning af database(hvis man kører lokalt på visual studio): 1. Naviger til appsettings.json under serversiden af solution explorer og udskift servernavnet med dit eget lokale sql servvernavn i ConnectionString > Husk "Build Solution"
-                        2. Naviger til Tools > NuGet Package Manager > Package Manager Console
-                        3. Skriv Update-Database og "enter"
-                        4. Databasen bør nu være oprettet i SQL Server Management Studio i din egen lokale database server med alle tabeller.
+*Opsætning af database(hvis man kører lokalt på visual studio): 
+
+1. Naviger til appsettings.json under serversiden af solution explorer og udskift servernavnet med dit eget lokale sql servvernavn i ConnectionString > Husk "Build Solution"
+2. Slet Migrations mappen i solution explorer
+3. Naviger til Tools > NuGet Package Manager > Package Manager Console
+4. Add-Migration InitialCreate tryk "ENTER"
+5. Skriv Update-Database og tryk "ENTER"
+6. Databasen bør nu være oprettet i SQL Server Management Studio i din egen lokale database server med alle tabeller.
                         
 --Når man kører appen og har browseren åbent--
 Man kan registrere sig som bruger(customer),
