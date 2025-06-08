@@ -12,7 +12,6 @@ namespace Gotorz.Data
         }
 
         // DbSets for our entities
-        public DbSet<User> AppUsers { get; set; }
         public DbSet<Booking> Bookings { get; set; }
         public DbSet<TravelPackage> TravelPackages { get; set; }
         public DbSet<FlightInfo> FlightInfos { get; set; }
@@ -44,11 +43,13 @@ namespace Gotorz.Data
                 .Property(h => h.PricePerNight)
                 .HasPrecision(18, 2);
 
-            // Configure relationships
+            // Configure Booking entity
             builder.Entity<Booking>()
-                .HasOne(b => b.User)
-                .WithMany(u => u.Bookings)
-                .HasForeignKey(b => b.UserId);
+                .Property(b => b.UserId)
+                .IsRequired()
+                .HasMaxLength(450); // Standard length for Identity IDs
+
+            // No explicit foreign key relationship for now
 
             // TravelPackage to Booking (optional - a package can exist without being booked)
             builder.Entity<TravelPackage>()
@@ -100,7 +101,6 @@ namespace Gotorz.Data
                 .HasIndex(c => c.Destination);
 
             // Rename the default Users table to AppUsers to avoid confusion with Identity
-            builder.Entity<User>().ToTable("AppUsers");
         }
     }
 }

@@ -53,25 +53,11 @@ namespace Gotorz.Services
                     throw new InvalidOperationException($"Identity user with email {userEmail} not found");
                 }
 
-                // Find or create the corresponding User entity in our custom table
-                var user = await _context.AppUsers.FirstOrDefaultAsync(u => u.Email == userEmail);
-                if (user == null)
-                {
-                    _logger.LogInformation($"Creating new user record for {userEmail}");
-                    user = new User
-                    {
-                        Email = userEmail,
-                        Username = identityUser.UserName ?? userEmail.Split('@')[0],
-                        Role = "Customer"
-                    };
-                    _context.AppUsers.Add(user);
-                    await _context.SaveChangesAsync();
-                }
 
                 // Create the booking first
                 var booking = new Booking
                 {
-                    UserId = user.Id,
+                    UserId = identityUser.Id,
                     BookingDate = DateTime.UtcNow,
                     TotalPrice = package.Price,
                     Status = "Confirmed"
@@ -149,7 +135,6 @@ namespace Gotorz.Services
                         .ThenInclude(tp => tp.Flight)
                     .Include(b => b.TravelPackages)
                         .ThenInclude(tp => tp.Hotel)
-                    .Include(b => b.User)
                     .FirstOrDefaultAsync(b => b.Id == booking.Id);
 
                 _logger.LogInformation($"Successfully created booking {booking.Id} for user {userEmail}");
@@ -169,7 +154,7 @@ namespace Gotorz.Services
         {
             try
             {
-                var user = await _context.AppUsers.FirstOrDefaultAsync(u => u.Email == userEmail);
+                var user = await _userManager.FindByEmailAsync(userEmail);
                 if (user == null)
                 {
                     _logger.LogWarning($"No user found with email {userEmail}");
@@ -181,8 +166,7 @@ namespace Gotorz.Services
                         .ThenInclude(tp => tp.Flight)
                     .Include(b => b.TravelPackages)
                         .ThenInclude(tp => tp.Hotel)
-                    .Include(b => b.User)
-                    .Where(b => b.UserId == user.Id)
+                    .Where(b => b.UserId == user.Id.ToString())
                     .OrderByDescending(b => b.BookingDate)
                     .ToListAsync();
             }
@@ -202,7 +186,6 @@ namespace Gotorz.Services
                         .ThenInclude(tp => tp.Flight)
                     .Include(b => b.TravelPackages)
                         .ThenInclude(tp => tp.Hotel)
-                    .Include(b => b.User)
                     .FirstOrDefaultAsync(b => b.Id == bookingId);
             }
             catch (Exception ex)
@@ -216,7 +199,7 @@ namespace Gotorz.Services
         {
             try
             {
-                var user = await _context.AppUsers.FirstOrDefaultAsync(u => u.Email == userEmail);
+                var user = await _userManager.FindByEmailAsync(userEmail);
                 if (user == null)
                 {
                     return null;
@@ -227,8 +210,7 @@ namespace Gotorz.Services
                         .ThenInclude(tp => tp.Flight)
                     .Include(b => b.TravelPackages)
                         .ThenInclude(tp => tp.Hotel)
-                    .Include(b => b.User)
-                    .FirstOrDefaultAsync(b => b.Id == bookingId && b.UserId == user.Id);
+                    .FirstOrDefaultAsync(b => b.Id == bookingId && b.UserId == user.Id.ToString());
             }
             catch (Exception ex)
             {
@@ -292,7 +274,6 @@ namespace Gotorz.Services
                         .ThenInclude(tp => tp.Flight)
                     .Include(b => b.TravelPackages)
                         .ThenInclude(tp => tp.Hotel)
-                    .Include(b => b.User)
                     .OrderByDescending(b => b.BookingDate)
                     .Skip(skip)
                     .Take(take)

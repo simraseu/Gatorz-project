@@ -264,7 +264,7 @@
                 // Load bookings (simplified for demo purposes)
                 recentBookings = await DbContext.Bookings
                     .Include(b => b.TravelPackages)
-                    .Where(b => b.UserId == 1) // Simplified - using a dummy user ID
+                    .Where(b => b.UserId == "1") // Simplified - using a dummy user ID
                     .OrderByDescending(b => b.BookingDate)
                     .Take(3)
                     .ToListAsync();

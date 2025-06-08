@@ -233,7 +233,7 @@
                 .ThenInclude(tp => tp.Flight)
                 .Include(b => b.TravelPackages)
                 .ThenInclude(tp => tp.Hotel)
-                .FirstOrDefaultAsync(b => b.Id == BookingId && b.UserId == 1);
+                .FirstOrDefaultAsync(b => b.Id == BookingId && b.UserId == currentUser.Id);
 
             if (booking == null)
             {

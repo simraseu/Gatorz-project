@@ -241,7 +241,7 @@
     private bool showNotificationSuccess = false;
 
     // Customer info cache
-    private Dictionary<int, string> customerInfoCache = new Dictionary<int, string>();
+    private Dictionary<string, string> customerInfoCache = new Dictionary<string, string>();
 
     protected override async Task OnInitializedAsync()
     {
@@ -565,7 +565,7 @@
             mockBookings.Add(new Booking
                 {
                     Id = 1000 + i,
-                    UserId = 100 + i,
+                    UserId = (100 + i).ToString(),
                     BookingDate = bookingDate,
                     TotalPrice = price,
                     Status = status,

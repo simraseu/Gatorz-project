@@ -641,11 +641,11 @@
             }
 
             // Try to load customer information
-            if (booking.UserId > 0)
+            if (!string.IsNullOrEmpty(booking.UserId))
             {
                 // This is a simplified approach
                 // In a real app with Identity integration, you'd use the actual UserId from Identity
-                customer = await UserManager.FindByIdAsync(booking.UserId.ToString());
+                customer = await UserManager.FindByIdAsync(booking.UserId);
             }
 
             // Load customer booking history
@@ -670,8 +670,8 @@
 
             // For demo, create mock data if database isn't available
             booking = CreateMockBooking(BookingId);
-            customer = CreateMockCustomer(booking.UserId);
-            customerBookings = CreateMockCustomerBookings(booking.UserId);
+            customer = CreateMockCustomer(101);
+            customerBookings = CreateMockCustomerBookings(101);
             bookingNotes = CreateMockBookingNotes(BookingId);
             refundAmount = CalculateRefundAmount();
         }
@@ -896,7 +896,7 @@
         return new Booking
             {
                 Id = id,
-                UserId = 101,
+                UserId = "101",
                 BookingDate = DateTime.Now.AddDays(-14),
                 TotalPrice = 3299,
                 Status = "Confirmed",
@@ -961,7 +961,7 @@
             new Booking
             {
                 Id = BookingId,
-                UserId = userId,
+                UserId = userId.ToString(),
                 BookingDate = DateTime.Now.AddDays(-14),
                 Status = "Confirmed",
                 TotalPrice = 3299,
@@ -973,7 +973,7 @@
             new Booking
             {
                 Id = BookingId - 100,
-                UserId = userId,
+                UserId = userId.ToString(),
                 BookingDate = DateTime.Now.AddDays(-120),
                 Status = "Completed",
                 TotalPrice = 2499,
@@ -985,7 +985,7 @@
             new Booking
             {
                 Id = BookingId - 200,
-                UserId = userId,
+                UserId = userId.ToString(),
                 BookingDate = DateTime.Now.AddDays(-230),
                 Status = "Completed",
                 TotalPrice = 4850,
