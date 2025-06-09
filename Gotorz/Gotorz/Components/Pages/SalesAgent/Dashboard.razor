@@ -105,7 +105,6 @@
                         <div class="list-group mb-3">
                             @foreach (var inquiry in realInquiries)
                             {
-                                <!-- UPDATED: Make the entire item clickable and navigate with inquiry ID -->
                                 <a href="/sales/inquiries?inquiryId=@inquiry.Id" class="list-group-item list-group-item-action">
                                     <div class="d-flex w-100 justify-content-between">
                                         <h6 class="mb-1">@inquiry.Subject</h6>
@@ -138,30 +137,11 @@
                         </div>
                     }
                 </div>
-                </div>
             </div>
         </div>
 
-    <div class="row">
-        <!-- Quick Actions -->
-        <div class="col-md-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Quick Actions</h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-grid gap-2">
-                        <a href="/sales/bookings/search" class="btn btn-outline-primary">Search Customer Bookings</a>
-                        <a href="/sales/bookings/create" class="btn btn-outline-primary">Create New Booking</a>
-                        <a href="/sales/notifications" class="btn btn-outline-primary">Send Customer Notification</a>
-                        <a href="/sales/reports" class="btn btn-outline-primary">Generate Reports</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Travel Package Stats -->
-        <div class="col-md-6 mb-4">
+        <!-- Popular Destinations (Full Width) -->
+        <div class="col-md-12 mb-4">
             <div class="card h-100">
                 <div class="card-header bg-light">
                     <h5 class="mb-0">Popular Destinations</h5>
@@ -310,12 +290,15 @@
 
             // Load real customer inquiries
             realInquiries = await DbContext.CustomerInquiries
-    .OrderByDescending(i => i.SubmittedDate)
-    .Take(5)
-    .ToListAsync();
+                .OrderByDescending(i => i.SubmittedDate)
+                .Take(5)
+                .ToListAsync();
 
             pendingSupport = await DbContext.CustomerInquiries
                 .CountAsync(i => i.Status == "Open");
+
+            // Load popular destinations
+            await LoadPopularDestinations();
         }
         catch (Exception)
         {
@@ -326,7 +309,35 @@
             realInquiries = new List<CustomerInquiry>();
             pendingSupport = 0;
             recentBookings = new List<Booking>();
-            popularDestinations = new List<DestinationStat>();
+            popularDestinations = CreateMockDestinationStats();
+        }
+    }
+
+    private async Task LoadPopularDestinations()
+    {
+        try
+        {
+            var destinations = await DbContext.Bookings
+                .Include(b => b.TravelPackages)
+                .SelectMany(b => b.TravelPackages)
+                .Where(tp => tp.StartDate >= DateTime.Now.AddDays(-30)) // Last 30 days
+                .GroupBy(tp => tp.Destination)
+                .Select(g => new DestinationStat
+                {
+                    Name = g.Key,
+                    BookingCount = g.Count(),
+                    AveragePrice = g.Average(tp => tp.Price)
+                })
+                .OrderByDescending(d => d.BookingCount)
+                .Take(6)
+                .ToListAsync();
+
+            popularDestinations = destinations.Any() ? destinations : CreateMockDestinationStats();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Popular destinations error: {ex.Message}");
+            popularDestinations = CreateMockDestinationStats();
         }
     }
 
@@ -398,64 +409,6 @@
             selectedInquiry = null;
             StateHasChanged();
         }
-    }
-
-    // Method to create mock bookings for preview
-    private List<Booking> CreateMockBookings()
-    {
-        return new List<Booking>
-        {
-            new Booking {
-                Id = 1001,
-                UserId = "101",
-                BookingDate = DateTime.Now.AddDays(-2),
-                TotalPrice = 2499,
-                Status = "Confirmed",
-                TravelPackages = new List<TravelPackage> {
-                    new TravelPackage { Destination = "Barcelona" }
-                }
-            },
-            new Booking {
-                Id = 1002,
-                UserId = "102",
-                BookingDate = DateTime.Now.AddDays(-3),
-                TotalPrice = 3299,
-                Status = "Pending",
-                TravelPackages = new List<TravelPackage> {
-                    new TravelPackage { Destination = "Rome" }
-                }
-            },
-            new Booking {
-                Id = 1003,
-                UserId = "103",
-                BookingDate = DateTime.Now.AddDays(-5),
-                TotalPrice = 4850,
-                Status = "Confirmed",
-                TravelPackages = new List<TravelPackage> {
-                    new TravelPackage { Destination = "Dubai" }
-                }
-            },
-            new Booking {
-                Id = 1004,
-                UserId = "104",
-                BookingDate = DateTime.Now.AddDays(-1),
-                TotalPrice = 1899,
-                Status = "Confirmed",
-                TravelPackages = new List<TravelPackage> {
-                    new TravelPackage { Destination = "Paris" }
-                }
-            },
-            new Booking {
-                Id = 1005,
-                UserId = "105",
-                BookingDate = DateTime.Now.AddDays(-7),
-                TotalPrice = 2750,
-                Status = "Cancelled",
-                TravelPackages = new List<TravelPackage> {
-                    new TravelPackage { Destination = "London" }
-                }
-            }
-        };
     }
 
     // Method to create mock destination statistics
