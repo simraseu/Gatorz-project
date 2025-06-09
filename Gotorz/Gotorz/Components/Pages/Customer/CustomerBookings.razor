@@ -10,6 +10,7 @@
 @inject ApplicationDbContext DbContext
 @inject NavigationManager NavigationManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@rendermode InteractiveServer
 
 <PageTitle>My Bookings - Gotorz</PageTitle>
 
@@ -19,22 +20,25 @@
 
     <ul class="nav nav-tabs mb-4">
         <li class="nav-item">
-            <a class="nav-link @(filter == "upcoming" ? "active" : "")"
-               @onclick="@(e => FilterBookings("upcoming"))" href="javascript:void(0)">
+            <button class="nav-link @(filter == "upcoming" ? "active" : "")"
+                    style="border: none; background: none;"
+                    @onclick="@(() => FilterBookings("upcoming"))">
                 Upcoming Trips
-            </a>
+            </button>
         </li>
         <li class="nav-item">
-            <a class="nav-link @(filter == "past" ? "active" : "")"
-               @onclick="@(e => FilterBookings("past"))" href="javascript:void(0)">
+            <button class="nav-link @(filter == "past" ? "active" : "")"
+                    style="border: none; background: none;"
+                    @onclick="@(() => FilterBookings("past"))">
                 Past Trips
-            </a>
+            </button>
         </li>
         <li class="nav-item">
-            <a class="nav-link @(filter == "all" ? "active" : "")"
-               @onclick="@(e => FilterBookings("all"))" href="javascript:void(0)">
+            <button class="nav-link @(filter == "all" ? "active" : "")"
+                    style="border: none; background: none;"
+                    @onclick="@(() => FilterBookings("all"))">
                 All Bookings
-            </a>
+            </button>
         </li>
     </ul>
 
@@ -97,9 +101,9 @@
                             }
 
                             <div class="text-end">
-                                <button class="btn btn-outline-primary" @onclick="() => ViewBookingDetails(booking.Id)">
+                                <a href="/customer/booking/@booking.Id" class="btn btn-outline-primary">
                                     View Details
-                                </button>
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -180,6 +184,8 @@
                 bookings = allBookings.ToList();
                 break;
         }
+
+        StateHasChanged();
     }
 
     private string GetStatusBadgeClass(string status)
@@ -195,22 +201,6 @@
 
     private void ViewBookingDetails(int bookingId)
     {
-        try
-        {
-            var detailsUrl = $"/customer/booking/{bookingId}";
-            NavigationManager.NavigateTo(detailsUrl);
-        }
-        catch (Exception ex)
-        {
-            // Try fallback navigation
-            try
-            {
-                NavigationManager.NavigateTo($"/customer/booking/{bookingId}", forceLoad: true);
-            }
-            catch
-            {
-                // Navigation failed, but we'll continue silently
-            }
-        }
+        NavigationManager.NavigateTo($"/customer/booking/{bookingId}");
     }
 }
