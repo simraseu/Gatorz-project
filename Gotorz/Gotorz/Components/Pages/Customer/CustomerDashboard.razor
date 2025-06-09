@@ -261,25 +261,37 @@
                 // Calculate days since registration
                 memberSince = (int)(DateTime.Now - currentUser.ProfileCreated).TotalDays;
 
-                // Load bookings (simplified for demo purposes)
+                // 🔧 FIXED: Load bookings for the ACTUAL current user (not hardcoded "1")
                 recentBookings = await DbContext.Bookings
                     .Include(b => b.TravelPackages)
-                    .Where(b => b.UserId == "1") // Simplified - using a dummy user ID
+                    .Where(b => b.UserId == currentUser.Id) // ✅ Use actual user ID
                     .OrderByDescending(b => b.BookingDate)
                     .Take(3)
                     .ToListAsync();
 
-                // Load customer inquiries
+                // Load customer inquiries for the ACTUAL current user
                 customerInquiries = await DbContext.CustomerInquiries
                     .Where(i => i.CustomerEmail == currentUser.Email)
                     .OrderByDescending(i => i.SubmittedDate)
                     .Take(5) // Limit to 5 most recent
                     .ToListAsync();
 
+                // 🔧 FIXED: Calculate stats based on actual user's bookings
                 totalBookings = recentBookings.Count;
 
-                // Count upcoming trips
+                // Count upcoming trips (bookings with travel dates in the future)
                 upcomingTrips = recentBookings
+                    .Count(b => b.TravelPackages.Any(tp => tp.StartDate >= DateTime.Now));
+
+                // 🔧 ADDITIONAL FIX: Get total count of ALL user's bookings, not just recent 3
+                var allUserBookings = await DbContext.Bookings
+                    .Where(b => b.UserId == currentUser.Id)
+                    .ToListAsync();
+
+                totalBookings = allUserBookings.Count;
+
+                // Count upcoming trips from all bookings, not just recent 3
+                upcomingTrips = allUserBookings
                     .Count(b => b.TravelPackages.Any(tp => tp.StartDate >= DateTime.Now));
             }
         }

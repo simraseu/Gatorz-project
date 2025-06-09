@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.Json;
+using System.Text;
 
 namespace Gotorz.Services
 {
@@ -50,8 +52,8 @@ namespace Gotorz.Services
                     // Calculate total price
                     decimal totalPrice = flight.Price + (hotel.PricePerNight * stayDuration);
 
-                    // Create a package with encoded parameters in the ID for later reconstruction
-                    var packageId = $"{origin}_{destination}_{departureDate:yyyyMMdd}_{returnDate:yyyyMMdd}_{flight.Id}_{hotel.Id}";
+                    // 🔧 NEW: Encode flight and hotel data directly in the package ID
+                    var packageId = EncodePackageData(origin, destination, departureDate, returnDate, flight, hotel);
 
                     packages.Add(new TravelPackageViewModel
                     {
@@ -81,77 +83,95 @@ namespace Gotorz.Services
 
         public async Task<TravelPackageViewModel> GetPackageByIdAsync(string packageId)
         {
-            // Parse the package ID to extract search parameters and IDs
-            var parts = packageId.Split('_');
-            if (parts.Length != 6)
+            try
             {
-                throw new ArgumentException("Invalid package ID format", nameof(packageId));
+                // 🔧 NEW: Decode flight and hotel data from package ID - NO API CALLS!
+                var packageData = DecodePackageData(packageId);
+
+                var origin = packageData.Origin;
+                var destination = packageData.Destination;
+                var departureDate = packageData.DepartureDate;
+                var returnDate = packageData.ReturnDate;
+                var flight = packageData.Flight;
+                var hotel = packageData.Hotel;
+
+                // Calculate stay duration and total price
+                int stayDuration = (int)(returnDate - departureDate).TotalDays;
+                decimal totalPrice = flight.Price + (hotel.PricePerNight * stayDuration);
+
+                // Create and return the package using decoded data
+                return new TravelPackageViewModel
+                {
+                    Id = packageId,
+                    Destination = destination,
+                    OriginCity = origin,
+                    StartDate = departureDate,
+                    EndDate = returnDate,
+                    Price = totalPrice,
+                    Description = $"Enjoy a {stayDuration}-night stay in {destination} at the {hotel.StarRating}-star {hotel.HotelName}, with flights via {flight.Airline}.",
+                    Airline = flight.Airline,
+                    HotelName = hotel.HotelName,
+                    HotelRating = hotel.StarRating,
+                    FlightDepartureTime = flight.DepartureTime,
+                    FlightArrivalTime = flight.ArrivalTime,
+                    ReturnFlightIncluded = true,
+                    ImageUrl = GetDestinationImageUrl(destination),
+                    Flight = flight,
+                    Hotel = hotel
+                };
             }
-
-            var origin = parts[0];
-            var destination = parts[1];
-
-            if (!DateTime.TryParseExact(parts[2], "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out var departureDate))
+            catch (Exception ex)
             {
-                throw new ArgumentException("Invalid departure date in package ID", nameof(packageId));
+                throw new InvalidOperationException($"Unable to decode package data from ID: {packageId}. Error: {ex.Message}");
             }
+        }
 
-            if (!DateTime.TryParseExact(parts[3], "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out var returnDate))
+        // 🔧 NEW: Helper method to encode all package data into the ID
+        private string EncodePackageData(string origin, string destination, DateTime departureDate, DateTime returnDate, FlightInfo flight, HotelInfo hotel)
+        {
+            var packageData = new
             {
-                throw new ArgumentException("Invalid return date in package ID", nameof(packageId));
-            }
-
-            if (!int.TryParse(parts[4], out var flightId) || !int.TryParse(parts[5], out var hotelId))
-            {
-                throw new ArgumentException("Invalid flight or hotel ID in package ID", nameof(packageId));
-            }
-
-            // Re-run the search to get the same results (this ensures consistency)
-            var flightsTask = _flightService.SearchFlightsAsync(origin, destination, departureDate);
-            var hotelsTask = _hotelService.SearchHotelsAsync(destination, departureDate, returnDate);
-            await Task.WhenAll(flightsTask, hotelsTask);
-
-            var flights = flightsTask.Result;
-            var hotels = hotelsTask.Result;
-
-            // Find the matching flight and hotel by ID
-            var flight = flights.FirstOrDefault(f => f.Id == flightId);
-            var hotel = hotels.FirstOrDefault(h => h.Id == hotelId);
-
-            if (flight == null)
-            {
-                throw new InvalidOperationException($"Could not find flight with ID {flightId} for route {origin} to {destination}");
-            }
-
-            if (hotel == null)
-            {
-                throw new InvalidOperationException($"Could not find hotel with ID {hotelId} in {destination}");
-            }
-
-            // Calculate stay duration and total price
-            int stayDuration = (int)(returnDate - departureDate).TotalDays;
-            decimal totalPrice = flight.Price + (hotel.PricePerNight * stayDuration);
-
-            // Create and return the package
-            return new TravelPackageViewModel
-            {
-                Id = packageId,
+                Origin = origin,
                 Destination = destination,
-                OriginCity = origin,
-                StartDate = departureDate,
-                EndDate = returnDate,
-                Price = totalPrice,
-                Description = $"Enjoy a {stayDuration}-night stay in {destination} at the {hotel.StarRating}-star {hotel.HotelName}, with flights via {flight.Airline}.",
-                Airline = flight.Airline,
-                HotelName = hotel.HotelName,
-                HotelRating = hotel.StarRating,
-                FlightDepartureTime = flight.DepartureTime,
-                FlightArrivalTime = flight.ArrivalTime,
-                ReturnFlightIncluded = true,
-                ImageUrl = GetDestinationImageUrl(destination),
+                DepartureDate = departureDate,
+                ReturnDate = returnDate,
                 Flight = flight,
                 Hotel = hotel
             };
+
+            // Serialize to JSON then encode to Base64 to create a compact package ID
+            var json = JsonSerializer.Serialize(packageData);
+            var bytes = Encoding.UTF8.GetBytes(json);
+            return Convert.ToBase64String(bytes);
+        }
+
+        // 🔧 NEW: Helper method to decode package data from the ID  
+        private dynamic DecodePackageData(string packageId)
+        {
+            try
+            {
+                // Decode from Base64 then deserialize from JSON
+                var bytes = Convert.FromBase64String(packageId);
+                var json = Encoding.UTF8.GetString(bytes);
+
+                // Parse as dynamic object
+                var jsonDoc = JsonDocument.Parse(json);
+                var root = jsonDoc.RootElement;
+
+                return new
+                {
+                    Origin = root.GetProperty("Origin").GetString(),
+                    Destination = root.GetProperty("Destination").GetString(),
+                    DepartureDate = root.GetProperty("DepartureDate").GetDateTime(),
+                    ReturnDate = root.GetProperty("ReturnDate").GetDateTime(),
+                    Flight = JsonSerializer.Deserialize<FlightInfo>(root.GetProperty("Flight").GetRawText()),
+                    Hotel = JsonSerializer.Deserialize<HotelInfo>(root.GetProperty("Hotel").GetRawText())
+                };
+            }
+            catch (Exception ex)
+            {
+                throw new ArgumentException($"Invalid package ID format: {ex.Message}", nameof(packageId));
+            }
         }
 
         private string GetDestinationImageUrl(string destination)
