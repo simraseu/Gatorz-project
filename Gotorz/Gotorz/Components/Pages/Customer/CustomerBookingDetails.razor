@@ -308,9 +308,8 @@
             StateHasChanged();
         }
     }
-
-    private void PrintBookingDetails()
-    {
-        // Implement printing functionality if needed
-    }
+    private async Task PrintBookingDetails()
+{
+    await JSRuntime.InvokeVoidAsync("window.print");
+}
 }
