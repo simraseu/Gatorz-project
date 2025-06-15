@@ -13,16 +13,7 @@ Admin, SalesAgent og Customer, som har hver især deres egne funktioner som de k
 deployed url: https://gotorz-travel-team-16-h9fjamhbbhg3ebfa.northeurope-01.azurewebsites.net/
 
 --Opsætningsvejledning--
-
-      
-*NuGet: Microsoft.AspNetCore.Components.WebAssembly.Server
-        Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore
-        Microsoft.AspNetCore.Identity.EntityFrameworkCore 
-        Microsoft.EntityFrameworkCore
-        Microsoft.EntityFrameworkCore.Design
-        Microsoft.EntityFrameworkCore.SqlServer
-        Microsoft.EntityFrameworkCore.Tools
-        Newtonsoft.Json
+Hvis man kører lokalt.
 
 *Opsætning af database(hvis man kører lokalt på visual studio): 
 
